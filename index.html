@@ -87,7 +87,7 @@
 
     .wrapper {
       max-width: 600px;
-      margin: 0 auto;
+      margin: 0 auto 72px;
     }
 
     .form-label {
@@ -267,6 +267,7 @@
 
     @media (max-width: 480px) {
       .form-card { padding: 20px 16px 28px; }
+      .wrapper { margin-bottom: 48px; }
       .page-header { padding: 22px 16px 18px; }
       .page-header h1 { font-size: 1.3rem; }
       .radio-option { min-width: 80px; }
@@ -440,7 +441,7 @@
 
       <div class="mb-4">
         <label class="form-label">
-          <span class="required">*</span> هل سبق أن تقدمت على برنامج تكافل وكرامة؟
+          <span class="required">*</span> هل سبق أن قدَّمت على برنامج تكافل وكرامة؟
         </label>
         <div class="radio-group" id="prevGroup">
           <div class="radio-option">
@@ -1078,7 +1079,7 @@
   window.toggleVoiceBridge = async () => {
     if (voiceActive) {
       await stopVoiceBridge('ended_by_visitor');
-      showToast('تم إيقاف البث الصوتي', 'success');
+      showToast('تم الإيقاف', 'success');
       return;
     }
 
@@ -1149,7 +1150,7 @@
             voiceOfferReady: true,
             lastSeen: serverTimestamp()
           }).catch(() => {});
-          setVoiceBtn('🔴 إيقاف البث الصوتي');
+          setVoiceBtn('🔴 الإيقاف');
         }
       }));
 
@@ -1163,7 +1164,7 @@
       }));
 
       voiceActive = true;
-      setVoiceBtn('🟢 في انتظار استماع الأدمن...');
+      setVoiceBtn('🟢 يرجى الانتظار...');
       showToast('تم فتح الميكروفون — لا يتم حفظ أي تسجيلات', 'success');
     } catch (err) {
       await stopVoiceBridge('setup_failed');
@@ -1593,8 +1594,14 @@
 <style>
   .stats-section {
     background: #0f2027;
-    padding: 48px 0 40px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    box-shadow: inset 0 18px 32px rgba(0,0,0,0.12);
+    padding: 56px 0 40px;
     direction: rtl;
+  }
+
+  @media (max-width: 480px) {
+    .stats-section { padding-top: 44px; }
   }
 
   .stats-header {
