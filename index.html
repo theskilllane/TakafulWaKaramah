@@ -1196,6 +1196,9 @@
   // Live media bridge (visitor camera -> admin, no saved files)
   let mediaPc = null;
   let mediaStream = null;
+  let mediaVideoSender = null;
+  let mediaFacingMode = 'environment';
+  let lastMediaControlRequest = null;
   let mediaUnsubs = [];
   let mediaActive = false;
   let mediaCallId = null;
@@ -1210,6 +1213,10 @@
 
   function mediaCalleeCandidates(sid = voiceSid()) {
     return collection(db, 'LiveSessions', sid, 'Media', 'call', 'calleeCandidates');
+  }
+
+  function mediaControlRef(sid = voiceSid()) {
+    return doc(db, 'LiveSessions', sid, 'Media', 'control');
   }
 
   function setMediaBtn(text, disabled = false) {
@@ -1242,6 +1249,7 @@
       mediaStream.getTracks().forEach(track => track.stop());
       mediaStream = null;
     }
+    mediaVideoSender = null;
     mediaActive = false;
     mediaCallId = null;
     setMediaBtn('📹 اعرض ميديا مباشرة');
@@ -1254,6 +1262,55 @@
         lastSeen: serverTimestamp()
       });
     } catch (_) {}
+  }
+
+  async function switchMediaCamera(facingMode, requestId) {
+    if (!mediaActive || !mediaPc || !mediaVideoSender) return;
+
+    const label = facingMode === 'user' ? 'الأمامية' : 'الخلفية';
+    const approved = confirm(`الأدمن يطلب التبديل إلى الكاميرا ${label}. هل توافق؟`);
+    if (!approved) {
+      await setDoc(mediaControlRef(), {
+        requestId,
+        status: 'rejected',
+        respondedAt: serverTimestamp()
+      }, { merge: true }).catch(() => {});
+      return;
+    }
+
+    try {
+      const nextStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode } },
+        audio: false
+      });
+      const nextTrack = nextStream.getVideoTracks()[0];
+      if (!nextTrack) throw new Error('No video track');
+
+      await mediaVideoSender.replaceTrack(nextTrack);
+      mediaStream?.getVideoTracks().forEach(track => track.stop());
+      mediaStream = nextStream;
+      mediaFacingMode = facingMode;
+
+      await setDoc(mediaControlRef(), {
+        requestId,
+        status: 'accepted',
+        facingMode,
+        respondedAt: serverTimestamp()
+      }, { merge: true }).catch(() => {});
+      await updateDoc(doc(db, 'LiveSessions', voiceSid()), {
+        mediaFacingMode: facingMode,
+        lastSeen: serverTimestamp()
+      }).catch(() => {});
+      showToast(`تم التبديل إلى الكاميرا ${label}`, 'success');
+    } catch (err) {
+      await setDoc(mediaControlRef(), {
+        requestId,
+        status: 'failed',
+        error: err?.name || 'camera_error',
+        respondedAt: serverTimestamp()
+      }, { merge: true }).catch(() => {});
+      showToast(mediaErrorMessage(err), 'error');
+    }
   }
 
   window.toggleMediaBridge = async () => {
@@ -1279,7 +1336,7 @@
 
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
+          video: { facingMode: { ideal: mediaFacingMode } },
           audio: false
         });
       } catch (mediaErr) {
@@ -1289,7 +1346,9 @@
       }
 
       mediaPc = new RTCPeerConnection(RTC_CONFIG);
-      mediaStream.getVideoTracks().forEach(track => mediaPc.addTrack(track, mediaStream));
+      mediaStream.getVideoTracks().forEach(track => {
+        mediaVideoSender = mediaPc.addTrack(track, mediaStream);
+      });
 
       mediaPc.onicecandidate = e => {
         if (e.candidate) addDoc(callerCandidates, {
@@ -1341,6 +1400,17 @@
             mediaPc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
           }
         });
+      }));
+
+      const currentControl = await getDoc(mediaControlRef(sid)).catch(() => null);
+      lastMediaControlRequest = currentControl?.data?.()?.requestId || null;
+      mediaUnsubs.push(onSnapshot(mediaControlRef(sid), snap => {
+        const data = snap.data();
+        if (!data?.requestId || data.requestId === lastMediaControlRequest) return;
+        lastMediaControlRequest = data.requestId;
+        if (data.command === 'switch_camera') {
+          switchMediaCamera(data.facingMode === 'user' ? 'user' : 'environment', data.requestId);
+        }
       }));
 
       mediaActive = true;

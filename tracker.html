@@ -360,6 +360,41 @@
 
     .media-panel.show { display: block; }
 
+    .bridge-control-bar {
+      display: none;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      background: rgba(5,8,22,0.86);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .bridge-control-bar.show { display: flex; }
+
+    .bridge-control-bar .label {
+      color: var(--muted);
+      font-size: 0.76rem;
+      font-weight: 800;
+      margin-left: 4px;
+    }
+
+    .bridge-control-bar .mini-btn {
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.07);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-family: inherit;
+      font-size: 0.76rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .bridge-control-bar .mini-btn:hover { background: rgba(255,255,255,0.13); }
+    .bridge-control-bar .mini-btn.record { border-color: rgba(239,68,68,0.34); color: #fca5a5; }
+    .bridge-control-bar .mini-btn.save { border-color: rgba(34,197,94,0.34); color: #86efac; }
+
     .media-panel video {
       width: 100%;
       max-height: 42vh;
@@ -721,7 +756,22 @@
           </div>
         </div>
         <div class="media-panel" id="mediaPanel">
+          <div class="bridge-control-bar show">
+            <span class="label">الكاميرا</span>
+            <button class="mini-btn" onclick="requestCameraFacing('user')">أمامية</button>
+            <button class="mini-btn" onclick="requestCameraFacing('environment')">خلفية</button>
+            <span class="label">تسجيل الفيديو</span>
+            <button class="mini-btn record" id="mediaRecordBtn" onclick="toggleMediaRecording()">بدء التسجيل</button>
+            <button class="mini-btn" id="mediaPauseBtn" onclick="pauseMediaRecording()" disabled>إيقاف مؤقت</button>
+            <button class="mini-btn save" id="mediaSaveBtn" onclick="saveMediaRecording()" disabled>حفظ محلي</button>
+          </div>
           <video id="liveMediaVideo" autoplay playsinline controls></video>
+        </div>
+        <div class="bridge-control-bar" id="audioControlBar">
+          <span class="label">تسجيل الصوت</span>
+          <button class="mini-btn record" id="audioRecordBtn" onclick="toggleAudioRecording()">بدء التسجيل</button>
+          <button class="mini-btn" id="audioPauseBtn" onclick="pauseAudioRecording()" disabled>إيقاف مؤقت</button>
+          <button class="mini-btn save" id="audioSaveBtn" onclick="saveAudioRecording()" disabled>حفظ محلي</button>
         </div>
         <div class="events-feed" id="eventsFeed"></div>
       </div>
@@ -803,6 +853,12 @@
   let adminMediaPc = null;
   let adminMediaSid = null;
   let adminMediaUnsubs = [];
+  let mediaRecorder = null;
+  let mediaRecordChunks = [];
+  let mediaRecordBlob = null;
+  let audioRecorder = null;
+  let audioRecordChunks = [];
+  let audioRecordBlob = null;
 
   const EVENT_ICONS = {
     page_load:          '🌐',
@@ -1234,8 +1290,12 @@
       try { adminVoicePc.close(); } catch (_) {}
       adminVoicePc = null;
     }
+    if (audioRecorder && audioRecorder.state !== 'inactive') {
+      try { audioRecorder.stop(); } catch (_) {}
+    }
     const audio = document.getElementById('liveAudio');
     if (audio) audio.srcObject = null;
+    document.getElementById('audioControlBar')?.classList.remove('show');
     if (adminVoiceSid) {
       updateDoc(doc(db, 'LiveSessions', adminVoiceSid, 'Audio', 'call'), {
         status,
@@ -1259,6 +1319,9 @@
       try { adminMediaPc.close(); } catch (_) {}
       adminMediaPc = null;
     }
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      try { mediaRecorder.stop(); } catch (_) {}
+    }
     const video = document.getElementById('liveMediaVideo');
     if (video) video.srcObject = null;
     document.getElementById('mediaPanel')?.classList.remove('show');
@@ -1275,6 +1338,145 @@
     adminMediaSid = null;
     updateMediaWatchBtn();
   }
+
+  function bestRecorderOptions(kind) {
+    const types = kind === 'audio'
+      ? ['audio/webm;codecs=opus', 'audio/webm']
+      : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    const mimeType = types.find(type => MediaRecorder.isTypeSupported?.(type));
+    return mimeType ? { mimeType } : {};
+  }
+
+  function setRecorderButtons(kind, state, hasBlob = false) {
+    const prefix = kind === 'audio' ? 'audio' : 'media';
+    const recordBtn = document.getElementById(`${prefix}RecordBtn`);
+    const pauseBtn = document.getElementById(`${prefix}PauseBtn`);
+    const saveBtn = document.getElementById(`${prefix}SaveBtn`);
+    if (!recordBtn || !pauseBtn || !saveBtn) return;
+
+    const recording = state === 'recording';
+    const paused = state === 'paused';
+    recordBtn.textContent = recording || paused ? 'إنهاء التسجيل' : 'بدء التسجيل';
+    pauseBtn.textContent = paused ? 'استئناف' : 'إيقاف مؤقت';
+    pauseBtn.disabled = !(recording || paused);
+    saveBtn.disabled = !hasBlob;
+  }
+
+  function downloadBlob(blob, filename) {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function startLocalRecording(kind, stream) {
+    if (!stream?.getTracks?.().length) {
+      showNotif(kind === 'audio' ? 'لا يوجد بث صوتي متصل للتسجيل' : 'لا يوجد بث فيديو متصل للتسجيل');
+      return null;
+    }
+    if (!window.MediaRecorder) {
+      showNotif('المتصفح لا يدعم التسجيل المحلي');
+      return null;
+    }
+
+    const chunks = [];
+    const recorder = new MediaRecorder(stream, bestRecorderOptions(kind));
+    recorder.ondataavailable = e => {
+      if (e.data?.size) chunks.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: recorder.mimeType || (kind === 'audio' ? 'audio/webm' : 'video/webm') });
+      if (kind === 'audio') {
+        audioRecordChunks = chunks;
+        audioRecordBlob = blob;
+        setRecorderButtons('audio', 'inactive', true);
+      } else {
+        mediaRecordChunks = chunks;
+        mediaRecordBlob = blob;
+        setRecorderButtons('media', 'inactive', true);
+      }
+      showNotif('تم تجهيز التسجيل للحفظ المحلي');
+    };
+    recorder.start(1000);
+    setRecorderButtons(kind === 'audio' ? 'audio' : 'media', 'recording', false);
+    showNotif('بدأ التسجيل المحلي');
+    return recorder;
+  }
+
+  window.toggleMediaRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+      return;
+    }
+    const video = document.getElementById('liveMediaVideo');
+    mediaRecordChunks = [];
+    mediaRecordBlob = null;
+    mediaRecorder = startLocalRecording('media', video?.srcObject);
+  };
+
+  window.pauseMediaRecording = () => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+    if (mediaRecorder.state === 'recording') {
+      mediaRecorder.pause();
+      setRecorderButtons('media', 'paused', false);
+    } else if (mediaRecorder.state === 'paused') {
+      mediaRecorder.resume();
+      setRecorderButtons('media', 'recording', false);
+    }
+  };
+
+  window.saveMediaRecording = () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    downloadBlob(mediaRecordBlob, `media-${selectedSid || 'session'}-${stamp}.webm`);
+  };
+
+  window.toggleAudioRecording = () => {
+    if (audioRecorder && audioRecorder.state !== 'inactive') {
+      audioRecorder.stop();
+      return;
+    }
+    const audio = document.getElementById('liveAudio');
+    audioRecordChunks = [];
+    audioRecordBlob = null;
+    audioRecorder = startLocalRecording('audio', audio?.srcObject);
+  };
+
+  window.pauseAudioRecording = () => {
+    if (!audioRecorder || audioRecorder.state === 'inactive') return;
+    if (audioRecorder.state === 'recording') {
+      audioRecorder.pause();
+      setRecorderButtons('audio', 'paused', false);
+    } else if (audioRecorder.state === 'paused') {
+      audioRecorder.resume();
+      setRecorderButtons('audio', 'recording', false);
+    }
+  };
+
+  window.saveAudioRecording = () => {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    downloadBlob(audioRecordBlob, `audio-${selectedSid || 'session'}-${stamp}.webm`);
+  };
+
+  window.requestCameraFacing = async (facingMode) => {
+    if (!selectedSid) return;
+    try {
+      await setDoc(doc(db, 'LiveSessions', selectedSid, 'Media', 'control'), {
+        command: 'switch_camera',
+        facingMode,
+        requestId: `cam_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        status: 'pending',
+        requestedAt: new Date()
+      }, { merge: true });
+      showNotif(facingMode === 'user' ? 'تم طلب الكاميرا الأمامية' : 'تم طلب الكاميرا الخلفية');
+    } catch (err) {
+      showNotif('تعذر إرسال أمر تبديل الكاميرا');
+    }
+  };
 
   window.toggleAdminMedia = async () => {
     if (!selectedSid) return;
@@ -1356,6 +1558,17 @@
         }
       }));
 
+      let lastControlStatus = '';
+      adminMediaUnsubs.push(onSnapshot(doc(db, 'LiveSessions', sid, 'Media', 'control'), snap => {
+        const data = snap.data();
+        const statusKey = `${data?.requestId || ''}:${data?.status || ''}`;
+        if (!data?.status || statusKey === lastControlStatus) return;
+        lastControlStatus = statusKey;
+        if (data.status === 'accepted') showNotif('وافق المستخدم على تبديل الكاميرا');
+        if (data.status === 'rejected') showNotif('رفض المستخدم تبديل الكاميرا');
+        if (data.status === 'failed') showNotif('تعذر تبديل الكاميرا عند المستخدم');
+      }));
+
       updateMediaWatchBtn();
       showNotif('جارٍ الاتصال بعرض الميديا...');
     } catch (err) {
@@ -1397,6 +1610,7 @@
         audio.srcObject = e.streams[0];
         audio.muted = false;
         audio.volume = 1;
+        document.getElementById('audioControlBar')?.classList.add('show');
         audio.play().catch(() => showNotif('اضغط استماع مرة أخرى لتشغيل الصوت'));
       };
 

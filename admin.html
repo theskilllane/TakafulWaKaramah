@@ -175,6 +175,10 @@
 
     .nav-item:hover       { background: rgba(255,255,255,0.07); color: white; }
     .nav-item.active      { background: var(--primary); color: white; font-weight: 600; }
+    .nav-item.nav-takaful.active {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 8px 20px rgba(37,99,235,0.28);
+    }
     .nav-item .nav-icon   { font-size: 1rem; width: 20px; text-align: center; }
 
     .sidebar-footer {
@@ -201,7 +205,12 @@
       gap: 12px;
     }
 
-    .topbar h2 { font-size: 1.3rem; font-weight: 700; color: #1a202c; }
+    .topbar h2 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #f8fafc;
+      text-shadow: 0 1px 10px rgba(0,0,0,0.22);
+    }
     .topbar .badge-count {
       background: var(--primary);
       color: white;
@@ -646,7 +655,7 @@
 
     <div class="nav-section">القوائم</div>
 
-    <div class="nav-item active" onclick="showPanel('takaful')">
+    <div class="nav-item nav-takaful active" onclick="showPanel('takaful')">
       <span class="nav-icon">📋</span> طلبات تكافل
     </div>
     <div class="nav-item" onclick="showPanel('visitors')">
