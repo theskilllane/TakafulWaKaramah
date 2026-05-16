@@ -624,8 +624,8 @@
     try {
       const snap = await getDoc(doc(db, 'settings', 'admin'));
       if (!snap.exists()) { errEl.style.display = 'block'; return; }
-      const { username, password } = snap.data();
-      if (u !== username || p !== password) { errEl.style.display = 'block'; return; }
+      const { userAdmin, passAdmin } = snap.data();
+      if (u !== String(userAdmin ?? '').trim() || p !== String(passAdmin ?? '').trim()) { errEl.style.display = 'block'; return; }
 
       sessionStorage.setItem('tracker_auth', '1');
       document.getElementById('loginScreen').style.display = 'none';
