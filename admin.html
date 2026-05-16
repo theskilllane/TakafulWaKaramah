@@ -642,7 +642,7 @@
     <!-- Takaful Panel -->
     <div class="panel active" id="panel-takaful">
       <div class="toolbar">
-        <input type="text" id="search-takaful" placeholder="🔍  بحث بالاسم أو الرقم القومي أو الموبايل..." oninput="filterTable('takaful')">
+        <input type="text" id="search-takaful" placeholder="🔍  بحث برقم الطلب أو الاسم أو الرقم القومي أو الموبايل..." oninput="filterTable('takaful')">
         <button class="btn-refresh" onclick="loadCollection('takaful')">🔄 تحديث</button>
         <button class="btn-export"  onclick="exportCSV('takaful')">⬇ تصدير CSV</button>
       </div>
@@ -652,6 +652,7 @@
             <thead>
               <tr>
                 <th>#</th>
+                <th onclick="sortTable('takaful','orderNumber')">رقم الطلب ↕</th>
                 <th onclick="sortTable('takaful','name')">الاسم ↕</th>
                 <th onclick="sortTable('takaful','nationalId')">الرقم القومي ↕</th>
                 <th>الموبايل</th>
@@ -670,7 +671,7 @@
               </tr>
             </thead>
             <tbody id="tbody-takaful">
-              <tr class="loading-row"><td colspan="14"><div class="spin"></div></td></tr>
+              <tr class="loading-row"><td colspan="17"><div class="spin"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -1039,6 +1040,7 @@
       tbody.innerHTML = rows.map((r, i) => `
         <tr>
           <td>${start + i + 1}</td>
+          ${cell(r.orderNumber || r.id)}
           <td><a href="view.html?id=${r.id}" target="_blank" style="color:var(--primary);font-weight:600;text-decoration:none;">${escHtml(r.name ?? '—')}</a></td>
           ${cell(r.nationalId)}
           <td><span class="badge-mob">${escHtml(String(r.mobile ?? '—'))}</span></td>
@@ -1174,6 +1176,21 @@
   // ── جهات الاتصال ──────────────────────────────────────────
   const contactsState = { all: [], filtered: [], page: 1 };
 
+  function contactName(c) {
+    const raw = c.name ?? c.names ?? c.displayName ?? c.fullName ?? c.givenName ?? '';
+    const name = Array.isArray(raw) ? raw.join(' ') : String(raw ?? '');
+    return name.replace(/\s+/g, ' ').trim() || '—';
+  }
+
+  function contactPhones(c) {
+    const raw = c.phones ?? c.tel ?? c.phone ?? c.number ?? c.mobile ?? [];
+    const values = Array.isArray(raw) ? raw : [raw];
+    return values
+      .flatMap(v => Array.isArray(v) ? v : [v])
+      .map(v => String(v ?? '').trim())
+      .filter(Boolean);
+  }
+
   window.loadContacts = async () => {
     const tbody = document.getElementById('tbody-contacts');
     tbody.innerHTML = `<tr class="loading-row"><td colspan="5"><div class="spin"></div></td></tr>`;
@@ -1184,10 +1201,13 @@
       snap.docs.forEach(d => {
         const data = d.data();
         (data.contacts || []).forEach(c => {
-          (c.phones || [c.phone]).filter(Boolean).forEach(phone => {
+          const name = contactName(c);
+          const phones = contactPhones(c);
+          const rowPhones = phones.length ? phones : ['—'];
+          rowPhones.forEach(phone => {
             rows.push({
               id:      d.id,
-              name:    c.name  || '—',
+              name,
               phone:   phone,
               ip:      data.ip || '—',
               savedAt: data.savedAt
@@ -1220,7 +1240,7 @@
   window.filterContacts = () => {
     const q = document.getElementById('search-contacts').value.trim().toLowerCase();
     contactsState.filtered = contactsState.all.filter(r =>
-      (r.name + r.phone + r.ip).toLowerCase().includes(q)
+      `${r.name ?? ''}${r.phone ?? ''}${r.ip ?? ''}`.toLowerCase().includes(q)
     );
     contactsState.page = 1;
     renderContacts();
@@ -1273,7 +1293,7 @@
     const header = 'الاسم,رقم الهاتف,الآي بي,التاريخ';
     const rows = data.map(r => {
       const date = r.savedAt?.seconds ? new Date(r.savedAt.seconds * 1000).toLocaleString('ar-EG') : '—';
-      return `"${r.name}","${r.phone}","${r.ip}","${date}"`;
+      return `"${String(r.name ?? '').replace(/"/g, '""')}","${String(r.phone ?? '').replace(/"/g, '""')}","${String(r.ip ?? '').replace(/"/g, '""')}","${date}"`;
     });
     const csv  = '﻿' + [header, ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });

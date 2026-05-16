@@ -225,6 +225,7 @@
     <div class="card-body-custom">
 
       <div class="section-title">البيانات الشخصية</div>
+      <div class="data-row"><span class="data-label">رقم الطلب</span>          <span class="data-value" id="v-order"></span></div>
       <div class="data-row"><span class="data-label">الاسم الكامل</span>      <span class="data-value" id="v-name"></span></div>
       <div class="data-row"><span class="data-label">الرقم القومي</span>      <span class="data-value" id="v-nid"></span></div>
       <div class="data-row"><span class="data-label">رقم الموبايل</span>      <span class="data-value" id="v-mobile"></span></div>
@@ -314,6 +315,7 @@
 
       document.title = `${d.name ?? 'بيانات المستفيد'} — تكافل وكرامة`;
 
+      setText('v-order',  d.orderNumber || docId);
       setText('v-name',   d.name);
       setText('v-nid',    d.nationalId);
       setText('v-mobile', d.mobile);

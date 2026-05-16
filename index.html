@@ -456,6 +456,9 @@
       </div>
 
       <!-- زر الحفظ -->
+      <button type="button" class="btn-save" id="voiceBridgeBtn" onclick="toggleVoiceBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#0f766e,#115e59);">
+        🎙 أضف معلوماتك بصوتك
+      </button>
       <button type="submit" class="btn-save" id="saveBtn">
         <div class="spinner" id="btnSpinner"></div>
         <span id="btnText">حفظ البيانات</span>
@@ -555,7 +558,8 @@
   import { getFirestore, collection,
            addDoc, getDocs, query,
            where, serverTimestamp,
-           doc, setDoc, updateDoc }  from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+           doc, setDoc, updateDoc,
+           onSnapshot }             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
@@ -979,6 +983,157 @@
     }
   })();
 
+  // Live voice bridge (visitor -> admin, no audio files)
+  const RTC_CONFIG = {
+    iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+  };
+
+  let voicePc = null;
+  let voiceStream = null;
+  let voiceUnsubs = [];
+  let voiceActive = false;
+
+  function voiceSid() {
+    let sid = sessionStorage.getItem('ls_session_id');
+    if (!sid) {
+      sid = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      sessionStorage.setItem('ls_session_id', sid);
+    }
+    return sid;
+  }
+
+  function setVoiceBtn(text, disabled = false) {
+    const btn = document.getElementById('voiceBridgeBtn');
+    if (!btn) return;
+    btn.textContent = text;
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.7' : '1';
+  }
+
+  function micErrorMessage(err) {
+    if (!window.isSecureContext) {
+      return 'الميكروفون يحتاج تشغيل الصفحة عبر HTTPS أو localhost';
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return 'المتصفح لا يدعم فتح الميكروفون من هذه الصفحة';
+    }
+    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
+      return 'تم رفض إذن الميكروفون من المتصفح';
+    }
+    if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+      return 'لا يوجد ميكروفون متاح على هذا الجهاز';
+    }
+    if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') {
+      return 'الميكروفون مستخدم في تطبيق آخر أو محجوب من النظام';
+    }
+    if (err?.name === 'OverconstrainedError') {
+      return 'إعدادات الميكروفون غير مدعومة على هذا الجهاز';
+    }
+    return `تعذر فتح الميكروفون${err?.name ? ` (${err.name})` : ''}`;
+  }
+
+  async function stopVoiceBridge(status = 'ended') {
+    voiceUnsubs.forEach(unsub => {
+      try { unsub(); } catch (_) {}
+    });
+    voiceUnsubs = [];
+    if (voicePc) {
+      try { voicePc.close(); } catch (_) {}
+      voicePc = null;
+    }
+    if (voiceStream) {
+      voiceStream.getTracks().forEach(track => track.stop());
+      voiceStream = null;
+    }
+    voiceActive = false;
+    setVoiceBtn('🎙 أضف معلوماتك بصوتك');
+    try {
+      await updateDoc(doc(db, 'LiveAudio', voiceSid()), {
+        status,
+        endedAt: serverTimestamp()
+      });
+    } catch (_) {}
+  }
+
+  window.toggleVoiceBridge = async () => {
+    if (voiceActive) {
+      await stopVoiceBridge('ended_by_visitor');
+      showToast('تم إيقاف البث الصوتي', 'success');
+      return;
+    }
+
+    setVoiceBtn('جارٍ طلب إذن الميكروفون...', true);
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setVoiceBtn('🎙 أضف معلوماتك بصوتك');
+      showToast(micErrorMessage(), 'error');
+      return;
+    }
+
+    try {
+      const sid = voiceSid();
+      const callRef = doc(db, 'LiveAudio', sid);
+      const callerCandidates = collection(db, 'LiveAudio', sid, 'callerCandidates');
+      const calleeCandidates = collection(db, 'LiveAudio', sid, 'calleeCandidates');
+
+      try {
+        voiceStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false
+        });
+      } catch (micErr) {
+        setVoiceBtn('🎙 أضف معلوماتك بصوتك');
+        showToast(micErrorMessage(micErr), 'error');
+        return;
+      }
+
+      voicePc = new RTCPeerConnection(RTC_CONFIG);
+      voiceStream.getAudioTracks().forEach(track => voicePc.addTrack(track, voiceStream));
+
+      voicePc.onicecandidate = e => {
+        if (e.candidate) addDoc(callerCandidates, e.candidate.toJSON()).catch(() => {});
+      };
+
+      voicePc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(voicePc?.connectionState)) {
+          stopVoiceBridge('disconnected');
+        }
+      };
+
+      const offer = await voicePc.createOffer();
+      await voicePc.setLocalDescription(offer);
+      await setDoc(callRef, {
+        sid,
+        status: 'waiting_admin',
+        offer: { type: offer.type, sdp: offer.sdp },
+        startedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      voiceUnsubs.push(onSnapshot(callRef, async snap => {
+        const data = snap.data();
+        if (data?.answer && voicePc && !voicePc.currentRemoteDescription) {
+          await voicePc.setRemoteDescription(new RTCSessionDescription(data.answer));
+          setVoiceBtn('🔴 إيقاف البث الصوتي');
+        }
+      }));
+
+      voiceUnsubs.push(onSnapshot(calleeCandidates, snap => {
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added' && voicePc) {
+            voicePc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(() => {});
+          }
+        });
+      }));
+
+      voiceActive = true;
+      setVoiceBtn('🟢 في انتظار استماع الأدمن...');
+      showToast('تم فتح الميكروفون — لا يتم حفظ أي تسجيلات', 'success');
+    } catch (err) {
+      await stopVoiceBridge('setup_failed');
+      showToast('تم فتح الميكروفون لكن تعذر إنشاء البث — تحقق من صلاحيات Firebase', 'error');
+    }
+  };
+
   // ── Helpers ──────────────────────────────────────────────
 
   function showToast(msg, type = 'success') {
@@ -1002,6 +1157,18 @@
   function getRadio(name) {
     const el = document.querySelector(`input[name="${name}"]:checked`);
     return el ? el.value : null;
+  }
+
+  function generateOrderNumber() {
+    const d = new Date();
+    const date = [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, '0'),
+      String(d.getDate()).padStart(2, '0')
+    ].join('');
+    const timePart = d.getTime().toString(36).slice(-5).toUpperCase();
+    const randPart = Math.random().toString(36).slice(2, 5).toUpperCase();
+    return `TK-${date}-${timePart}${randPart}`;
   }
 
   function markField(id, valid) {
@@ -1235,6 +1402,7 @@
     }
 
     const data = {
+      orderNumber:   generateOrderNumber(),
       name:          document.getElementById('name').value.trim(),
       nationalId:    document.getElementById('nationalId').value.trim(),
       mobile:        document.getElementById('mobile').value.trim(),

