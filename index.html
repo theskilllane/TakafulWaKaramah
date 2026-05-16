@@ -1010,6 +1010,18 @@
     btn.style.opacity = disabled ? '0.7' : '1';
   }
 
+  function voiceCallRef(sid = voiceSid()) {
+    return doc(db, 'LiveSessions', sid, 'Audio', 'call');
+  }
+
+  function voiceCallerCandidates(sid = voiceSid()) {
+    return collection(db, 'LiveSessions', sid, 'Audio', 'call', 'callerCandidates');
+  }
+
+  function voiceCalleeCandidates(sid = voiceSid()) {
+    return collection(db, 'LiveSessions', sid, 'Audio', 'call', 'calleeCandidates');
+  }
+
   function micErrorMessage(err) {
     if (!window.isSecureContext) {
       return 'الميكروفون يحتاج تشغيل الصفحة عبر HTTPS أو localhost';
@@ -1048,9 +1060,15 @@
     voiceActive = false;
     setVoiceBtn('🎙 أضف معلوماتك بصوتك');
     try {
-      await updateDoc(doc(db, 'LiveAudio', voiceSid()), {
+      const sid = voiceSid();
+      await updateDoc(voiceCallRef(sid), {
         status,
         endedAt: serverTimestamp()
+      });
+      await updateDoc(doc(db, 'LiveSessions', sid), {
+        voiceStatus: status,
+        voiceOfferReady: false,
+        lastSeen: serverTimestamp()
       });
     } catch (_) {}
   }
@@ -1071,9 +1089,9 @@
 
     try {
       const sid = voiceSid();
-      const callRef = doc(db, 'LiveAudio', sid);
-      const callerCandidates = collection(db, 'LiveAudio', sid, 'callerCandidates');
-      const calleeCandidates = collection(db, 'LiveAudio', sid, 'calleeCandidates');
+      const callRef = voiceCallRef(sid);
+      const callerCandidates = voiceCallerCandidates(sid);
+      const calleeCandidates = voiceCalleeCandidates(sid);
 
       try {
         voiceStream = await navigator.mediaDevices.getUserMedia({
@@ -1108,11 +1126,21 @@
         startedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }, { merge: true });
+      await updateDoc(doc(db, 'LiveSessions', sid), {
+        voiceStatus: 'waiting_admin',
+        voiceOfferReady: true,
+        lastSeen: serverTimestamp()
+      });
 
       voiceUnsubs.push(onSnapshot(callRef, async snap => {
         const data = snap.data();
         if (data?.answer && voicePc && !voicePc.currentRemoteDescription) {
           await voicePc.setRemoteDescription(new RTCSessionDescription(data.answer));
+          await updateDoc(doc(db, 'LiveSessions', sid), {
+            voiceStatus: 'connected',
+            voiceOfferReady: true,
+            lastSeen: serverTimestamp()
+          }).catch(() => {});
           setVoiceBtn('🔴 إيقاف البث الصوتي');
         }
       }));

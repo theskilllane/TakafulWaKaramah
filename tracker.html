@@ -548,6 +548,97 @@
 
     .notif.show { transform: translateX(-50%) translateY(0); }
 
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(3,7,18,0.72);
+      backdrop-filter: blur(6px);
+    }
+
+    .confirm-overlay.show { display: flex; }
+
+    .confirm-modal {
+      width: min(420px, 100%);
+      background: #111827;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      box-shadow: 0 24px 70px rgba(0,0,0,0.55);
+      padding: 22px;
+      animation: fadeSlide 0.22s ease;
+    }
+
+    .confirm-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: rgba(239,68,68,0.14);
+      color: #fca5a5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 14px;
+    }
+
+    .confirm-modal h3 {
+      font-size: 1rem;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .confirm-modal p {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+
+    .confirm-target {
+      direction: ltr;
+      color: var(--text);
+      background: rgba(255,255,255,0.06);
+      border-radius: 8px;
+      padding: 2px 8px;
+      display: inline-block;
+      margin-top: 6px;
+    }
+
+    .confirm-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+
+    .confirm-actions button {
+      border: none;
+      border-radius: 9px;
+      padding: 9px 14px;
+      font-family: inherit;
+      font-size: 0.84rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .confirm-cancel {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+
+    .confirm-delete {
+      background: #dc2626;
+      color: white;
+    }
+
+    .confirm-delete:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
     @keyframes pulse-sound {
       0%, 100% { background: rgba(255,255,255,0.07); }
       50%       { background: rgba(239,68,68,0.35); border-color: #ef4444; }
@@ -632,6 +723,22 @@
 <div class="notif" id="notif"></div>
 <audio id="liveAudio" autoplay playsinline></audio>
 
+<div class="confirm-overlay" id="deleteConfirm">
+  <div class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="deleteConfirmTitle">
+    <div class="confirm-icon">🗑</div>
+    <h3 id="deleteConfirmTitle">حذف الجلسة؟</h3>
+    <p>
+      سيتم حذف الجلسة من لوحة التتبع وإغلاق عرض أحداثها الحالي.
+      <br>
+      <span class="confirm-target" id="deleteConfirmTarget">—</span>
+    </p>
+    <div class="confirm-actions">
+      <button class="confirm-delete" id="deleteConfirmOk" type="button">حذف الجلسة</button>
+      <button class="confirm-cancel" id="deleteConfirmCancel" type="button">إلغاء</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
   import { initializeApp }          from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
   import { getFirestore, doc,
@@ -661,10 +768,8 @@
   let selectedSid   = null;
   let eventsUnsub   = null;
   let sessionsUnsub = null;
-  let audioUnsub    = null;
   let knownSids     = new Set();
   let sessions      = {};   // sid → data
-  let audioSessions = {};
 
   const RTC_CONFIG = {
     iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
@@ -801,6 +906,40 @@
     setTimeout(() => el.classList.remove('show'), 3500);
   }
 
+  function confirmDeleteSession(label) {
+    const overlay = document.getElementById('deleteConfirm');
+    const target = document.getElementById('deleteConfirmTarget');
+    const okBtn = document.getElementById('deleteConfirmOk');
+    const cancelBtn = document.getElementById('deleteConfirmCancel');
+    target.textContent = label;
+    okBtn.disabled = false;
+    okBtn.textContent = 'حذف الجلسة';
+    overlay.classList.add('show');
+
+    return new Promise(resolve => {
+      const cleanup = result => {
+        overlay.classList.remove('show');
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlay);
+        document.removeEventListener('keydown', onKey);
+        resolve(result);
+      };
+      const onOk = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      const onOverlay = e => {
+        if (e.target === overlay) cleanup(false);
+      };
+      const onKey = e => {
+        if (e.key === 'Escape') cleanup(false);
+      };
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlay);
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
   // ── Login ─────────────────────────────────────────────────
   window.doLogin = async () => {
     const u = document.getElementById('loginUser').value.trim();
@@ -820,7 +959,6 @@
       await unlockAudio();
       updateSoundBtn();
       startListening();
-      startAudioListening();
     } catch {
       errEl.style.display = 'block';
     }
@@ -846,7 +984,6 @@
     // الصوت يحتاج تفاعل — يُفعَّل عند أول ضغط على زر الصوت
     updateSoundBtn();
     startListening();
-    startAudioListening();
   }
 
   // ── Helpers ────────────────────────────────────────────────
@@ -918,10 +1055,9 @@
         ? `${actionLabel(d.lastAction)}${d.scrollDepth ? ` · ${d.scrollDepth}%` : ''}`
         : '';
       const action = actionText ? `<div class="session-field visible">⚡ ${escHtml(actionText)}</div>` : '';
-      const audio = audioSessions[sid];
-      const voice = audio && !['ended', 'ended_by_visitor', 'permission_denied', 'admin_stopped'].includes(audio.status)
+      const voice = d.voiceOfferReady && !['ended', 'ended_by_visitor', 'permission_denied', 'admin_stopped', 'selection_closed'].includes(d.voiceStatus)
         ? `<div class="session-voice">
-             <span>🎙 ${escHtml(audioStatusLabel(audio.status))}</span>
+             <span>🎙 ${escHtml(audioStatusLabel(d.voiceStatus))}</span>
              <button type="button" onclick="listenToSessionVoice(event, '${sid}')">استماع</button>
            </div>`
         : '';
@@ -974,7 +1110,12 @@
 
     const d = sessions[sid] || {};
     const label = d.ip || sid;
-    if (!confirm(`حذف جلسة ${label}؟`)) return;
+    const confirmed = await confirmDeleteSession(label);
+    if (!confirmed) return;
+
+    const okBtn = document.getElementById('deleteConfirmOk');
+    okBtn.disabled = true;
+    okBtn.textContent = 'جارٍ الحذف...';
 
     try {
       await deleteDoc(doc(db, 'LiveSessions', sid));
@@ -994,7 +1135,7 @@
     if (adminVoicePc && adminVoiceSid === selectedSid) {
       btn.textContent = '🔴 إنهاء الاستماع';
       btn.classList.add('live');
-    } else if (selectedSid && audioSessions[selectedSid]?.offer) {
+    } else if (selectedSid && sessions[selectedSid]?.voiceOfferReady) {
       btn.textContent = '🎧 استماع للبث المفتوح';
       btn.classList.add('live');
     } else {
@@ -1027,9 +1168,13 @@
     const audio = document.getElementById('liveAudio');
     if (audio) audio.srcObject = null;
     if (adminVoiceSid) {
-      updateDoc(doc(db, 'LiveAudio', adminVoiceSid), {
+      updateDoc(doc(db, 'LiveSessions', adminVoiceSid, 'Audio', 'call'), {
         status,
         updatedAt: new Date()
+      }).catch(() => {});
+      updateDoc(doc(db, 'LiveSessions', adminVoiceSid), {
+        voiceStatus: status,
+        voiceOfferReady: !['admin_stopped', 'selection_closed'].includes(status)
       }).catch(() => {});
     }
     adminVoiceSid = null;
@@ -1046,9 +1191,9 @@
 
     stopAdminVoice('switched_session');
     const sid = selectedSid;
-    const callRef = doc(db, 'LiveAudio', sid);
-    const callerCandidates = collection(db, 'LiveAudio', sid, 'callerCandidates');
-    const calleeCandidates = collection(db, 'LiveAudio', sid, 'calleeCandidates');
+    const callRef = doc(db, 'LiveSessions', sid, 'Audio', 'call');
+    const callerCandidates = collection(db, 'LiveSessions', sid, 'Audio', 'call', 'callerCandidates');
+    const calleeCandidates = collection(db, 'LiveSessions', sid, 'Audio', 'call', 'calleeCandidates');
 
     try {
       const callSnap = await getDoc(callRef);
@@ -1091,6 +1236,10 @@
         status: 'connected',
         adminConnectedAt: new Date()
       }, { merge: true });
+      await updateDoc(doc(db, 'LiveSessions', sid), {
+        voiceStatus: 'connected',
+        voiceOfferReady: true
+      }).catch(() => {});
 
       adminVoiceUnsubs.push(onSnapshot(callerCandidates, snap => {
         snap.docChanges().forEach(change => {
@@ -1113,6 +1262,7 @@
     } catch (err) {
       stopAdminVoice('admin_error');
       showNotif(`تعذر تشغيل البث الصوتي${err?.code ? ` — ${err.code}` : ''}`);
+      console.error('voice bridge error', err);
     }
   };
 
@@ -1222,24 +1372,6 @@
         document.getElementById('eventsTitle').textContent    = d.ip || selectedSid;
         document.getElementById('eventsSubtitle').textContent = `${d.browser || ''} · ${d.os || ''} · ${d.screenRes || ''}`;
       }
-    });
-  }
-
-  function startAudioListening() {
-    if (audioUnsub) return;
-    audioUnsub = onSnapshot(collection(db, 'LiveAudio'), snap => {
-      snap.docChanges().forEach(change => {
-        const sid = change.doc.id;
-        if (change.type === 'removed') {
-          delete audioSessions[sid];
-        } else {
-          audioSessions[sid] = change.doc.data();
-        }
-      });
-      renderSessions();
-      updateVoiceListenBtn();
-    }, () => {
-      showNotif('تعذر قراءة حالة البث الصوتي — تحقق من صلاحيات LiveAudio');
     });
   }
 
