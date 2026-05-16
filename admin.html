@@ -697,6 +697,9 @@
                 <th>الشاشة</th>
                 <th>الجهاز</th>
                 <th>اللغة</th>
+                <th onclick="sortTable('visitors','gpsLat')">Latitude ↕</th>
+                <th onclick="sortTable('visitors','gpsLon')">Longitude ↕</th>
+                <th>الخريطة</th>
                 <th>المنطقة الزمنية</th>
                 <th>المصدر</th>
                 <th onclick="sortTable('visitors','visitedAt')">وقت الزيارة ↕</th>
@@ -704,7 +707,7 @@
               </tr>
             </thead>
             <tbody id="tbody-visitors">
-              <tr class="loading-row"><td colspan="10"><div class="spin"></div></td></tr>
+              <tr class="loading-row"><td colspan="14"><div class="spin"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -973,6 +976,17 @@
 
   function cell(v)  { return `<td title="${escHtml(String(v ?? ''))}">${escHtml(String(v ?? '—'))}</td>`; }
   function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function coord(v) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n.toFixed(6) : '—';
+  }
+  function visitorMapLink(r) {
+    const lat = r.gpsLat ?? r.lat ?? r.latitude;
+    const lon = r.gpsLon ?? r.lon ?? r.lng ?? r.longitude;
+    if (!r.googleMapsUrl && (lat == null || lon == null)) return '—';
+    const url = r.googleMapsUrl || `https://maps.google.com/?q=${lat},${lon}`;
+    return `<a href="${escHtml(url)}" target="_blank" class="maps-link">📍 خريطة</a>`;
+  }
 
   // ── Delete ────────────────────────────────────────────────
   const colMap = { takaful: 'Takaful', visitors: 'Visitors' };
@@ -1059,6 +1073,9 @@
             ? '<span class="badge-mob">موبايل</span>'
             : '<span class="badge-desk">كمبيوتر</span>'}</td>
           ${cell(r.language)}
+          ${cell(coord(r.gpsLat ?? r.lat ?? r.latitude))}
+          ${cell(coord(r.gpsLon ?? r.lon ?? r.lng ?? r.longitude))}
+          <td>${visitorMapLink(r)}</td>
           ${cell(r.timezone)}
           ${cell(r.referrer)}
           ${cell(fmtDate(r.visitedAt))}

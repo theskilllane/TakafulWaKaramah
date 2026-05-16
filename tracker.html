@@ -255,6 +255,35 @@
 
     .session-device-icon { font-size: 1rem; }
 
+    .session-delete {
+      width: 26px;
+      height: 26px;
+      border: 1px solid rgba(239,68,68,0.28);
+      background: rgba(239,68,68,0.1);
+      color: #fca5a5;
+      border-radius: 8px;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .session-delete:hover {
+      background: rgba(239,68,68,0.22);
+      color: #fecaca;
+    }
+
+    .icon-btn.danger {
+      border-color: rgba(239,68,68,0.35);
+      color: #fca5a5;
+      background: rgba(239,68,68,0.08);
+    }
+
+    .icon-btn.danger:hover { background: rgba(239,68,68,0.18); }
+
     .session-meta {
       display: flex;
       justify-content: space-between;
@@ -314,6 +343,13 @@
     .events-subtitle {
       font-size: 0.75rem;
       color: var(--muted);
+    }
+
+    .events-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
     }
 
     .events-feed {
@@ -404,6 +440,22 @@
     .ev-page_unload  .event-body { border-color: #dc2626; }
     .ev-heartbeat    .event-icon { background: rgba(20,184,166,0.1); }
     .ev-heartbeat    .event-body { border-color: #14b8a6; }
+    .ev-scroll_depth .event-icon { background: rgba(14,165,233,0.15); }
+    .ev-scroll_depth .event-body { border-color: #0ea5e9; }
+    .ev-text_select  .event-icon { background: rgba(217,70,239,0.15); }
+    .ev-text_select  .event-body { border-color: #d946ef; }
+    .ev-button_click .event-icon { background: rgba(245,158,11,0.18); }
+    .ev-button_click .event-body { border-color: #f59e0b; }
+    .ev-link_click   .event-icon { background: rgba(59,130,246,0.16); }
+    .ev-link_click   .event-body { border-color: #3b82f6; }
+    .ev-field_change .event-icon { background: rgba(34,197,94,0.15); }
+    .ev-field_change .event-body { border-color: #22c55e; }
+    .ev-copy .event-icon,
+    .ev-cut .event-icon,
+    .ev-paste .event-icon { background: rgba(148,163,184,0.15); }
+    .ev-copy .event-body,
+    .ev-cut .event-body,
+    .ev-paste .event-body { border-color: #94a3b8; }
 
     /* No session selected */
     .no-session {
@@ -507,7 +559,10 @@
             <div class="events-title" id="eventsTitle">اختر جلسة</div>
             <div class="events-subtitle" id="eventsSubtitle"></div>
           </div>
-          <button class="icon-btn" onclick="clearSelection()">✕ إغلاق</button>
+          <div class="events-actions">
+            <button class="icon-btn danger" onclick="deleteSession(event)">🗑 حذف الجلسة</button>
+            <button class="icon-btn" onclick="clearSelection()">✕ إغلاق</button>
+          </div>
         </div>
         <div class="events-feed" id="eventsFeed"></div>
       </div>
@@ -535,7 +590,8 @@
   import { getFirestore, doc,
            getDoc, collection,
            query, orderBy,
-           onSnapshot }             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+           onSnapshot,
+           deleteDoc }              from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
@@ -569,6 +625,14 @@
     visibility_visible: '👁',
     page_unload:        '🚪',
     heartbeat:          '💓',
+    scroll_depth:       '📜',
+    text_select:        '🔎',
+    button_click:       '👆',
+    link_click:         '🔗',
+    field_change:       '🔁',
+    copy:               '📋',
+    cut:                '✂️',
+    paste:              '📥',
   };
 
   const EVENT_LABELS = {
@@ -583,6 +647,14 @@
     visibility_visible: 'عاد للتبويب',
     page_unload:        'أغلق الصفحة',
     heartbeat:          'إشارة حياة',
+    scroll_depth:       'قام بالتمرير',
+    text_select:        'حدد نصاً',
+    button_click:       'ضغط زر',
+    link_click:         'ضغط رابط',
+    field_change:       'غيّر قيمة',
+    copy:               'نسخ',
+    cut:                'قص',
+    paste:              'لصق',
   };
 
   // ── Audio ─────────────────────────────────────────────────
@@ -727,6 +799,10 @@
     return 'خرج';
   }
 
+  function actionLabel(action) {
+    return EVENT_LABELS[action] || action || '';
+  }
+
   function fmtTime(ts) {
     if (!ts?.seconds) return '';
     return new Date(ts.seconds * 1000).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -758,7 +834,11 @@
     list.innerHTML = sorted.map(([sid, d]) => {
       const icon    = deviceIcon(d.userAgent || d.os);
       const status  = d.status || 'left';
-      const field   = d.currentField ? `<div class="session-field visible">✏️ ${d.currentField}</div>` : '';
+      const field   = d.currentField ? `<div class="session-field visible">✏️ ${escHtml(String(d.currentField))}</div>` : '';
+      const actionText = d.lastAction
+        ? `${actionLabel(d.lastAction)}${d.scrollDepth ? ` · ${d.scrollDepth}%` : ''}`
+        : '';
+      const action = actionText ? `<div class="session-field visible">⚡ ${escHtml(actionText)}</div>` : '';
       const sel     = sid === selectedSid ? 'selected' : '';
       return `
         <div class="session-card ${sel}" onclick="selectSession('${sid}')">
@@ -766,12 +846,14 @@
             <div class="status-dot ${status}"></div>
             <div class="session-ip">${d.ip || '—'}</div>
             <div class="session-device-icon">${icon}</div>
+            <button class="session-delete" title="حذف الجلسة" onclick="deleteSession(event, '${sid}')">🗑</button>
           </div>
           <div class="session-meta">
             <span>${d.browser || '?'} / ${d.os || '?'}</span>
             <span>${elapsed(d.lastSeen?.seconds)}</span>
           </div>
           ${field}
+          ${action}
         </div>`;
     }).join('');
   }
@@ -789,6 +871,29 @@
     document.getElementById('eventsView').style.display  = 'none';
     document.getElementById('noSession').style.display   = 'flex';
     renderSessions();
+  };
+
+  window.deleteSession = async (e, sid = selectedSid) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (!sid) return;
+
+    const d = sessions[sid] || {};
+    const label = d.ip || sid;
+    if (!confirm(`حذف جلسة ${label}؟`)) return;
+
+    try {
+      await deleteDoc(doc(db, 'LiveSessions', sid));
+      delete sessions[sid];
+      knownSids.delete(sid);
+      if (selectedSid === sid) clearSelection();
+      renderSessions();
+      showNotif('تم حذف الجلسة');
+    } catch (err) {
+      showNotif('تعذر حذف الجلسة — تحقق من صلاحيات Firebase');
+    }
   };
 
   // ── Load events for a session ──────────────────────────────

