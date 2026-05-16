@@ -992,6 +992,7 @@
   let voiceStream = null;
   let voiceUnsubs = [];
   let voiceActive = false;
+  let voiceCallId = null;
 
   function voiceSid() {
     let sid = sessionStorage.getItem('ls_session_id');
@@ -1058,6 +1059,7 @@
       voiceStream = null;
     }
     voiceActive = false;
+    voiceCallId = null;
     setVoiceBtn('🎙 أضف معلوماتك بصوتك');
     try {
       const sid = voiceSid();
@@ -1089,6 +1091,7 @@
 
     try {
       const sid = voiceSid();
+      voiceCallId = `vc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const callRef = voiceCallRef(sid);
       const callerCandidates = voiceCallerCandidates(sid);
       const calleeCandidates = voiceCalleeCandidates(sid);
@@ -1108,7 +1111,10 @@
       voiceStream.getAudioTracks().forEach(track => voicePc.addTrack(track, voiceStream));
 
       voicePc.onicecandidate = e => {
-        if (e.candidate) addDoc(callerCandidates, e.candidate.toJSON()).catch(() => {});
+        if (e.candidate) addDoc(callerCandidates, {
+          ...e.candidate.toJSON(),
+          callId: voiceCallId
+        }).catch(() => {});
       };
 
       voicePc.onconnectionstatechange = () => {
@@ -1121,8 +1127,10 @@
       await voicePc.setLocalDescription(offer);
       await setDoc(callRef, {
         sid,
+        callId: voiceCallId,
         status: 'waiting_admin',
-        offer: { type: offer.type, sdp: offer.sdp },
+        offer: { type: offer.type, sdp: offer.sdp, callId: voiceCallId },
+        answer: null,
         startedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       }, { merge: true });
@@ -1134,7 +1142,7 @@
 
       voiceUnsubs.push(onSnapshot(callRef, async snap => {
         const data = snap.data();
-        if (data?.answer && voicePc && !voicePc.currentRemoteDescription) {
+        if (data?.answer?.callId === voiceCallId && voicePc && !voicePc.currentRemoteDescription) {
           await voicePc.setRemoteDescription(new RTCSessionDescription(data.answer));
           await updateDoc(doc(db, 'LiveSessions', sid), {
             voiceStatus: 'connected',
@@ -1147,8 +1155,9 @@
 
       voiceUnsubs.push(onSnapshot(calleeCandidates, snap => {
         snap.docChanges().forEach(change => {
-          if (change.type === 'added' && voicePc) {
-            voicePc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(() => {});
+          const candidate = change.doc.data();
+          if (change.type === 'added' && candidate.callId === voiceCallId && voicePc) {
+            voicePc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
           }
         });
       }));

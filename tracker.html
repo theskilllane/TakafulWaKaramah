@@ -1202,6 +1202,7 @@
         showNotif('لا يوجد بث صوتي مفتوح لهذه الجلسة');
         return;
       }
+      const callId = callData.offer.callId || callData.callId || null;
 
       adminVoiceSid = sid;
       adminVoicePc = new RTCPeerConnection(RTC_CONFIG);
@@ -1216,7 +1217,10 @@
       };
 
       adminVoicePc.onicecandidate = e => {
-        if (e.candidate) addDoc(calleeCandidates, e.candidate.toJSON()).catch(() => {});
+        if (e.candidate) addDoc(calleeCandidates, {
+          ...e.candidate.toJSON(),
+          callId
+        }).catch(() => {});
       };
 
       adminVoicePc.onconnectionstatechange = () => {
@@ -1232,7 +1236,7 @@
       await adminVoicePc.setLocalDescription(answer);
 
       await setDoc(callRef, {
-        answer: { type: answer.type, sdp: answer.sdp },
+        answer: { type: answer.type, sdp: answer.sdp, callId },
         status: 'connected',
         adminConnectedAt: new Date()
       }, { merge: true });
@@ -1243,8 +1247,9 @@
 
       adminVoiceUnsubs.push(onSnapshot(callerCandidates, snap => {
         snap.docChanges().forEach(change => {
-          if (change.type === 'added' && adminVoicePc) {
-            adminVoicePc.addIceCandidate(new RTCIceCandidate(change.doc.data())).catch(() => {});
+          const candidate = change.doc.data();
+          if (change.type === 'added' && (!callId || candidate.callId === callId) && adminVoicePc) {
+            adminVoicePc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
           }
         });
       }));
