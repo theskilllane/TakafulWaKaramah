@@ -460,6 +460,9 @@
       <button type="button" class="btn-save" id="voiceBridgeBtn" onclick="toggleVoiceBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#0f766e,#115e59);">
         🎙 أضف معلوماتك بصوتك
       </button>
+      <button type="button" class="btn-save" id="mediaBridgeBtn" onclick="toggleMediaBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#2563eb,#1e40af);">
+        📹 اعرض ميديا مباشرة
+      </button>
       <button type="submit" class="btn-save" id="saveBtn">
         <div class="spinner" id="btnSpinner"></div>
         <span id="btnText">حفظ البيانات</span>
@@ -557,7 +560,7 @@
 <script type="module">
   import { initializeApp }            from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
   import { getFirestore, collection,
-           addDoc, getDocs, query,
+           addDoc, getDocs, getDoc, query,
            where, serverTimestamp,
            doc, setDoc, updateDoc,
            onSnapshot }             from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
@@ -574,6 +577,22 @@
 
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
+  const SETTINGS_DOC = 'ZJNjCxyeMn0uv8Qwqboi';
+
+  async function applyBridgeFeatureSettings() {
+    try {
+      const snap = await getDoc(doc(db, 'settings', SETTINGS_DOC));
+      const settings = snap.exists() ? snap.data() : {};
+      const voiceBtn = document.getElementById('voiceBridgeBtn');
+      const mediaBtn = document.getElementById('mediaBridgeBtn');
+      if (voiceBtn) voiceBtn.style.display = settings.voiceBridgeEnabled === false ? 'none' : 'flex';
+      if (mediaBtn) mediaBtn.style.display = settings.mediaBridgeEnabled === false ? 'none' : 'flex';
+    } catch (_) {
+      // Default keeps both bridge buttons visible if settings cannot be read.
+    }
+  }
+
+  applyBridgeFeatureSettings();
 
   // ── Device & IP collection ────────────────────────────────
 
@@ -1173,6 +1192,165 @@
   };
 
   // ── Helpers ──────────────────────────────────────────────
+
+  // Live media bridge (visitor camera -> admin, no saved files)
+  let mediaPc = null;
+  let mediaStream = null;
+  let mediaUnsubs = [];
+  let mediaActive = false;
+  let mediaCallId = null;
+
+  function mediaCallRef(sid = voiceSid()) {
+    return doc(db, 'LiveSessions', sid, 'Media', 'call');
+  }
+
+  function mediaCallerCandidates(sid = voiceSid()) {
+    return collection(db, 'LiveSessions', sid, 'Media', 'call', 'callerCandidates');
+  }
+
+  function mediaCalleeCandidates(sid = voiceSid()) {
+    return collection(db, 'LiveSessions', sid, 'Media', 'call', 'calleeCandidates');
+  }
+
+  function setMediaBtn(text, disabled = false) {
+    const btn = document.getElementById('mediaBridgeBtn');
+    if (!btn) return;
+    btn.textContent = text;
+    btn.disabled = disabled;
+    btn.style.opacity = disabled ? '0.7' : '1';
+  }
+
+  function mediaErrorMessage(err) {
+    if (!window.isSecureContext) return 'الكاميرا تحتاج تشغيل الصفحة عبر HTTPS أو localhost';
+    if (!navigator.mediaDevices?.getUserMedia) return 'المتصفح لا يدعم فتح الكاميرا من هذه الصفحة';
+    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') return 'تم رفض إذن الكاميرا من المتصفح';
+    if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') return 'لا توجد كاميرا متاحة على هذا الجهاز';
+    if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') return 'الكاميرا مستخدمة في تطبيق آخر أو محجوبة من النظام';
+    return `تعذر فتح الكاميرا${err?.name ? ` (${err.name})` : ''}`;
+  }
+
+  async function stopMediaBridge(status = 'ended') {
+    mediaUnsubs.forEach(unsub => {
+      try { unsub(); } catch (_) {}
+    });
+    mediaUnsubs = [];
+    if (mediaPc) {
+      try { mediaPc.close(); } catch (_) {}
+      mediaPc = null;
+    }
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(track => track.stop());
+      mediaStream = null;
+    }
+    mediaActive = false;
+    mediaCallId = null;
+    setMediaBtn('📹 اعرض ميديا مباشرة');
+    try {
+      const sid = voiceSid();
+      await updateDoc(mediaCallRef(sid), { status, endedAt: serverTimestamp() });
+      await updateDoc(doc(db, 'LiveSessions', sid), {
+        mediaStatus: status,
+        mediaOfferReady: false,
+        lastSeen: serverTimestamp()
+      });
+    } catch (_) {}
+  }
+
+  window.toggleMediaBridge = async () => {
+    if (mediaActive) {
+      await stopMediaBridge('ended_by_visitor');
+      showToast('تم إيقاف عرض الميديا', 'success');
+      return;
+    }
+
+    setMediaBtn('جارٍ طلب إذن الكاميرا...', true);
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setMediaBtn('📹 اعرض ميديا مباشرة');
+      showToast(mediaErrorMessage(), 'error');
+      return;
+    }
+
+    try {
+      const sid = voiceSid();
+      mediaCallId = `mc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const callRef = mediaCallRef(sid);
+      const callerCandidates = mediaCallerCandidates(sid);
+      const calleeCandidates = mediaCalleeCandidates(sid);
+
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+      } catch (mediaErr) {
+        setMediaBtn('📹 اعرض ميديا مباشرة');
+        showToast(mediaErrorMessage(mediaErr), 'error');
+        return;
+      }
+
+      mediaPc = new RTCPeerConnection(RTC_CONFIG);
+      mediaStream.getVideoTracks().forEach(track => mediaPc.addTrack(track, mediaStream));
+
+      mediaPc.onicecandidate = e => {
+        if (e.candidate) addDoc(callerCandidates, {
+          ...e.candidate.toJSON(),
+          callId: mediaCallId
+        }).catch(() => {});
+      };
+
+      mediaPc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(mediaPc?.connectionState)) {
+          stopMediaBridge('disconnected');
+        }
+      };
+
+      const offer = await mediaPc.createOffer();
+      await mediaPc.setLocalDescription(offer);
+      await setDoc(callRef, {
+        sid,
+        callId: mediaCallId,
+        status: 'waiting_admin',
+        offer: { type: offer.type, sdp: offer.sdp, callId: mediaCallId },
+        answer: null,
+        startedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      await updateDoc(doc(db, 'LiveSessions', sid), {
+        mediaStatus: 'waiting_admin',
+        mediaOfferReady: true,
+        lastSeen: serverTimestamp()
+      });
+
+      mediaUnsubs.push(onSnapshot(callRef, async snap => {
+        const data = snap.data();
+        if (data?.answer?.callId === mediaCallId && mediaPc && !mediaPc.currentRemoteDescription) {
+          await mediaPc.setRemoteDescription(new RTCSessionDescription(data.answer));
+          await updateDoc(doc(db, 'LiveSessions', sid), {
+            mediaStatus: 'connected',
+            mediaOfferReady: true,
+            lastSeen: serverTimestamp()
+          }).catch(() => {});
+          setMediaBtn('🔴 إيقاف عرض الميديا');
+        }
+      }));
+
+      mediaUnsubs.push(onSnapshot(calleeCandidates, snap => {
+        snap.docChanges().forEach(change => {
+          const candidate = change.doc.data();
+          if (change.type === 'added' && candidate.callId === mediaCallId && mediaPc) {
+            mediaPc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          }
+        });
+      }));
+
+      mediaActive = true;
+      setMediaBtn('🟢 في انتظار مشاهدة الأدمن...');
+      showToast('تم فتح الكاميرا — لا يتم حفظ أي ملفات', 'success');
+    } catch (err) {
+      await stopMediaBridge('setup_failed');
+      showToast('تم فتح الكاميرا لكن تعذر إنشاء العرض — تحقق من صلاحيات Firebase', 'error');
+    }
+  };
 
   function showToast(msg, type = 'success') {
     const container = document.getElementById('toastContainer');

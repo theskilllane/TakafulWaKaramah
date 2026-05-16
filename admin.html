@@ -534,6 +534,79 @@
     }
 
     .confirm-btns .btn-confirm-cancel:hover { background: #e2e8f0; }
+
+    .settings-card {
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      padding: 22px;
+      max-width: 680px;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 0;
+      border-bottom: 1px solid #edf2f7;
+    }
+
+    .settings-row:last-child { border-bottom: none; }
+
+    .settings-row h3 {
+      font-size: 0.98rem;
+      font-weight: 800;
+      color: #1a202c;
+      margin: 0 0 4px;
+    }
+
+    .settings-row p {
+      font-size: 0.82rem;
+      color: #718096;
+      margin: 0;
+      line-height: 1.6;
+    }
+
+    .switch {
+      position: relative;
+      width: 54px;
+      height: 30px;
+      flex-shrink: 0;
+    }
+
+    .switch input { display: none; }
+
+    .switch span {
+      position: absolute;
+      inset: 0;
+      background: #cbd5e0;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .switch span::before {
+      content: '';
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      top: 3px;
+      right: 3px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+      transition: transform 0.2s;
+    }
+
+    .switch input:checked + span { background: var(--primary); }
+    .switch input:checked + span::before { transform: translateX(-24px); }
+
+    .settings-status {
+      margin-top: 14px;
+      font-size: 0.85rem;
+      color: #718096;
+    }
   </style>
 </head>
 <body>
@@ -581,6 +654,9 @@
     </div>
     <div class="nav-item" onclick="showPanel('contacts')">
       <span class="nav-icon">📞</span> جهات الاتصال
+    </div>
+    <div class="nav-item" onclick="showPanel('settings')">
+      <span class="nav-icon">⚙</span> إعدادات النموذج
     </div>
 
     <div class="nav-section">روابط</div>
@@ -744,6 +820,34 @@
       </div>
     </div>
 
+    <!-- Settings Panel -->
+    <div class="panel" id="panel-settings">
+      <div class="settings-card">
+        <div class="settings-row">
+          <div>
+            <h3>زر إضافة المعلومات بالصوت</h3>
+            <p>إظهار أو إخفاء زر فتح الميكروفون في نموذج المستخدم.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setVoiceBridge">
+            <span></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <div>
+            <h3>زر عرض الميديا المباشر</h3>
+            <p>إظهار أو إخفاء زر فتح الكاميرا وعرض الفيديو المباشر للأدمن.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setMediaBridge">
+            <span></span>
+          </label>
+        </div>
+        <button class="btn-refresh" style="margin-top:18px;" onclick="saveBridgeSettings()">💾 حفظ الإعدادات</button>
+        <div class="settings-status" id="settingsStatus"></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -765,7 +869,8 @@
   import { initializeApp }       from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
   import { getFirestore,
            collection, getDocs, getDoc,
-           doc, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+           doc, deleteDoc, updateDoc,
+           setDoc } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
@@ -872,6 +977,7 @@
   // ── Init ──────────────────────────────────────────────────
   async function init() {
     await Promise.all([loadCollection('takaful'), loadCollection('visitors')]);
+    await loadBridgeSettings();
     updateStatCards();
   }
 
@@ -1154,18 +1260,52 @@
   };
 
   // ── Panel switch ──────────────────────────────────────────
+  async function loadBridgeSettings() {
+    const status = document.getElementById('settingsStatus');
+    try {
+      const settings = await getSettingsReady();
+      document.getElementById('setVoiceBridge').checked = settings.voiceBridgeEnabled !== false;
+      document.getElementById('setMediaBridge').checked = settings.mediaBridgeEnabled !== false;
+      if (status) status.textContent = 'تم تحميل الإعدادات.';
+    } catch {
+      document.getElementById('setVoiceBridge').checked = true;
+      document.getElementById('setMediaBridge').checked = true;
+      if (status) status.textContent = 'تعذر تحميل الإعدادات، سيتم استخدام الوضع الافتراضي.';
+    }
+  }
+
+  window.saveBridgeSettings = async () => {
+    const status = document.getElementById('settingsStatus');
+    const voiceBridgeEnabled = document.getElementById('setVoiceBridge').checked;
+    const mediaBridgeEnabled = document.getElementById('setMediaBridge').checked;
+    if (status) status.textContent = 'جارٍ الحفظ...';
+    try {
+      await setDoc(doc(db, 'settings', SETTINGS_DOC), {
+        voiceBridgeEnabled,
+        mediaBridgeEnabled
+      }, { merge: true });
+      _settingsPromise = null;
+      if (status) status.textContent = 'تم حفظ الإعدادات بنجاح.';
+    } catch {
+      if (status) status.textContent = 'تعذر حفظ الإعدادات. تحقق من صلاحيات Firebase.';
+    }
+  };
+
   window.showPanel = (col) => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     document.getElementById(`panel-${col}`).classList.add('active');
     event.currentTarget.classList.add('active');
 
-    const titles = { takaful: 'طلبات تكافل وكرامة', visitors: 'سجل الزوار', contacts: 'جهات الاتصال' };
+    const titles = { takaful: 'طلبات تكافل وكرامة', visitors: 'سجل الزوار', contacts: 'جهات الاتصال', settings: 'إعدادات النموذج' };
     document.getElementById('panelTitle').textContent = titles[col] ?? col;
 
     if (col === 'contacts') {
       document.getElementById('totalBadge').textContent = contactsState.filtered.length;
       if (contactsState.all.length === 0) loadContacts();
+    } else if (col === 'settings') {
+      document.getElementById('totalBadge').textContent = '';
+      loadBridgeSettings();
     } else {
       document.getElementById('totalBadge').textContent = state[col].filtered.length;
     }

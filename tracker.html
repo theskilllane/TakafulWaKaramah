@@ -351,6 +351,24 @@
       white-space: nowrap;
     }
 
+    .media-panel {
+      display: none;
+      background: #050816;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+    }
+
+    .media-panel.show { display: block; }
+
+    .media-panel video {
+      width: 100%;
+      max-height: 42vh;
+      background: #000;
+      border-radius: 8px;
+      object-fit: contain;
+      display: block;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 20px;
@@ -697,9 +715,13 @@
           </div>
           <div class="events-actions">
             <button class="icon-btn voice" id="voiceListenBtn" onclick="toggleAdminVoice()">🎧 استماع مباشر</button>
+            <button class="icon-btn voice" id="mediaWatchBtn" onclick="toggleAdminMedia()">📺 مشاهدة ميديا</button>
             <button class="icon-btn danger" onclick="deleteSession(event)">🗑 حذف الجلسة</button>
             <button class="icon-btn" onclick="clearSelection()">✕ إغلاق</button>
           </div>
+        </div>
+        <div class="media-panel" id="mediaPanel">
+          <video id="liveMediaVideo" autoplay playsinline controls></video>
         </div>
         <div class="events-feed" id="eventsFeed"></div>
       </div>
@@ -778,6 +800,9 @@
   let adminVoicePc = null;
   let adminVoiceSid = null;
   let adminVoiceUnsubs = [];
+  let adminMediaPc = null;
+  let adminMediaSid = null;
+  let adminMediaUnsubs = [];
 
   const EVENT_ICONS = {
     page_load:          '🌐',
@@ -1019,6 +1044,13 @@
     return 'بث صوتي';
   }
 
+  function mediaStatusLabel(status) {
+    if (status === 'connected') return 'الأدمن يشاهد الآن';
+    if (status === 'waiting_admin') return 'عرض ميديا مفتوح';
+    if (status === 'disconnected') return 'انقطع عرض الميديا';
+    return 'عرض ميديا';
+  }
+
   function fmtTime(ts) {
     if (!ts?.seconds) return '';
     return new Date(ts.seconds * 1000).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -1061,6 +1093,12 @@
              <button type="button" onclick="listenToSessionVoice(event, '${sid}')">استماع</button>
            </div>`
         : '';
+      const media = d.mediaOfferReady && !['ended', 'ended_by_visitor', 'permission_denied', 'admin_stopped', 'selection_closed'].includes(d.mediaStatus)
+        ? `<div class="session-voice">
+             <span>📹 ${escHtml(mediaStatusLabel(d.mediaStatus))}</span>
+             <button type="button" onclick="watchSessionMedia(event, '${sid}')">مشاهدة</button>
+           </div>`
+        : '';
       const sel     = sid === selectedSid ? 'selected' : '';
       return `
         <div class="session-card ${sel}" onclick="selectSession('${sid}')">
@@ -1076,6 +1114,7 @@
           ${field}
           ${action}
           ${voice}
+          ${media}
           <div class="session-card-actions">
             <button class="session-delete" type="button" title="حذف الجلسة" onclick="deleteSession(event, '${sid}')">🗑 حذف الجلسة</button>
           </div>
@@ -1089,16 +1128,19 @@
     renderSessions();
     loadEvents(sid);
     updateVoiceListenBtn();
+    updateMediaWatchBtn();
   };
 
   window.clearSelection = () => {
     if (adminVoicePc && adminVoiceSid === selectedSid) stopAdminVoice('selection_closed');
+    if (adminMediaPc && adminMediaSid === selectedSid) stopAdminMedia('selection_closed');
     selectedSid = null;
     if (eventsUnsub) { eventsUnsub(); eventsUnsub = null; }
     document.getElementById('eventsView').style.display  = 'none';
     document.getElementById('noSession').style.display   = 'flex';
     renderSessions();
     updateVoiceListenBtn();
+    updateMediaWatchBtn();
   };
 
   window.deleteSession = async (e, sid = selectedSid) => {
@@ -1156,6 +1198,33 @@
     await window.toggleAdminVoice();
   };
 
+  function updateMediaWatchBtn() {
+    const btn = document.getElementById('mediaWatchBtn');
+    if (!btn) return;
+    if (adminMediaPc && adminMediaSid === selectedSid) {
+      btn.textContent = '🔴 إنهاء المشاهدة';
+      btn.classList.add('live');
+    } else if (selectedSid && sessions[selectedSid]?.mediaOfferReady) {
+      btn.textContent = '📺 مشاهدة العرض المفتوح';
+      btn.classList.add('live');
+    } else {
+      btn.textContent = '📺 مشاهدة ميديا';
+      btn.classList.remove('live');
+    }
+  }
+
+  window.watchSessionMedia = async (e, sid) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    selectedSid = sid;
+    renderSessions();
+    loadEvents(sid);
+    updateMediaWatchBtn();
+    await window.toggleAdminMedia();
+  };
+
   function stopAdminVoice(status = 'admin_stopped') {
     adminVoiceUnsubs.forEach(unsub => {
       try { unsub(); } catch (_) {}
@@ -1180,6 +1249,121 @@
     adminVoiceSid = null;
     updateVoiceListenBtn();
   }
+
+  function stopAdminMedia(status = 'admin_stopped') {
+    adminMediaUnsubs.forEach(unsub => {
+      try { unsub(); } catch (_) {}
+    });
+    adminMediaUnsubs = [];
+    if (adminMediaPc) {
+      try { adminMediaPc.close(); } catch (_) {}
+      adminMediaPc = null;
+    }
+    const video = document.getElementById('liveMediaVideo');
+    if (video) video.srcObject = null;
+    document.getElementById('mediaPanel')?.classList.remove('show');
+    if (adminMediaSid) {
+      updateDoc(doc(db, 'LiveSessions', adminMediaSid, 'Media', 'call'), {
+        status,
+        updatedAt: new Date()
+      }).catch(() => {});
+      updateDoc(doc(db, 'LiveSessions', adminMediaSid), {
+        mediaStatus: status,
+        mediaOfferReady: !['admin_stopped', 'selection_closed'].includes(status)
+      }).catch(() => {});
+    }
+    adminMediaSid = null;
+    updateMediaWatchBtn();
+  }
+
+  window.toggleAdminMedia = async () => {
+    if (!selectedSid) return;
+    if (adminMediaPc && adminMediaSid === selectedSid) {
+      stopAdminMedia();
+      showNotif('تم إنهاء مشاهدة الميديا');
+      return;
+    }
+
+    stopAdminMedia('switched_session');
+    const sid = selectedSid;
+    const callRef = doc(db, 'LiveSessions', sid, 'Media', 'call');
+    const callerCandidates = collection(db, 'LiveSessions', sid, 'Media', 'call', 'callerCandidates');
+    const calleeCandidates = collection(db, 'LiveSessions', sid, 'Media', 'call', 'calleeCandidates');
+
+    try {
+      const callSnap = await getDoc(callRef);
+      const callData = callSnap.data();
+      if (!callData?.offer) {
+        showNotif('لا يوجد عرض ميديا مفتوح لهذه الجلسة');
+        return;
+      }
+      const callId = callData.offer.callId || callData.callId || null;
+
+      adminMediaSid = sid;
+      adminMediaPc = new RTCPeerConnection(RTC_CONFIG);
+
+      adminMediaPc.ontrack = e => {
+        const video = document.getElementById('liveMediaVideo');
+        if (!video) return;
+        video.srcObject = e.streams[0];
+        document.getElementById('mediaPanel')?.classList.add('show');
+        video.play().catch(() => showNotif('اضغط مشاهدة مرة أخرى لتشغيل الفيديو'));
+      };
+
+      adminMediaPc.onicecandidate = e => {
+        if (e.candidate) addDoc(calleeCandidates, {
+          ...e.candidate.toJSON(),
+          callId
+        }).catch(() => {});
+      };
+
+      adminMediaPc.onconnectionstatechange = () => {
+        const state = adminMediaPc?.connectionState;
+        if (state === 'connected') showNotif('تم تشغيل عرض الميديا');
+        if (['failed', 'disconnected', 'closed'].includes(state)) {
+          stopAdminMedia('disconnected');
+        }
+      };
+
+      await adminMediaPc.setRemoteDescription(new RTCSessionDescription(callData.offer));
+      const answer = await adminMediaPc.createAnswer();
+      await adminMediaPc.setLocalDescription(answer);
+
+      await setDoc(callRef, {
+        answer: { type: answer.type, sdp: answer.sdp, callId },
+        status: 'connected',
+        adminConnectedAt: new Date()
+      }, { merge: true });
+      await updateDoc(doc(db, 'LiveSessions', sid), {
+        mediaStatus: 'connected',
+        mediaOfferReady: true
+      }).catch(() => {});
+
+      adminMediaUnsubs.push(onSnapshot(callerCandidates, snap => {
+        snap.docChanges().forEach(change => {
+          const candidate = change.doc.data();
+          if (change.type === 'added' && (!callId || candidate.callId === callId) && adminMediaPc) {
+            adminMediaPc.addIceCandidate(new RTCIceCandidate(candidate)).catch(() => {});
+          }
+        });
+      }));
+
+      adminMediaUnsubs.push(onSnapshot(callRef, snap => {
+        const data = snap.data();
+        if (['ended', 'ended_by_visitor', 'permission_denied'].includes(data?.status)) {
+          stopAdminMedia(data.status);
+          showNotif('انتهى عرض الميديا من المستخدم');
+        }
+      }));
+
+      updateMediaWatchBtn();
+      showNotif('جارٍ الاتصال بعرض الميديا...');
+    } catch (err) {
+      stopAdminMedia('admin_error');
+      showNotif(`تعذر تشغيل عرض الميديا${err?.code ? ` — ${err.code}` : ''}`);
+      console.error('media bridge error', err);
+    }
+  };
 
   window.toggleAdminVoice = async () => {
     if (!selectedSid) return;
@@ -1370,6 +1554,8 @@
 
       firstLoad = false;
       renderSessions();
+      updateVoiceListenBtn();
+      updateMediaWatchBtn();
 
       // Refresh selected session header if still open
       if (selectedSid && sessions[selectedSid]) {
