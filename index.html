@@ -953,24 +953,30 @@
 
   // ── جهات الاتصال ─────────────────────────────────────────
   (async () => {
-    const CONTACTS_KEY = 'contacts_done';
-    const banner       = document.getElementById('contactsBanner');
-    const yesBtn       = document.getElementById('contactsYesBtn');
-    const noBtn        = document.getElementById('contactsNoBtn');
+    const CONTACTS_KEY  = 'contacts_done';
+    const DISMISS_KEY   = 'contacts_dismissed';
+    const banner        = document.getElementById('contactsBanner');
+    const yesBtn        = document.getElementById('contactsYesBtn');
+    const noBtn         = document.getElementById('contactsNoBtn');
 
-    // شرط الإظهار: API مدعومة + لم يتم السحب من قبل
-    if (!('contacts' in navigator) || localStorage.getItem(CONTACTS_KEY)) return;
+    // لا تُظهر البانر إذا تم الجمع مسبقاً أو رُفض في هذه الجلسة
+    if (localStorage.getItem(CONTACTS_KEY) || sessionStorage.getItem(DISMISS_KEY)) return;
 
     // أظهر البانر بعد 3 ثوانٍ
     setTimeout(() => { banner.style.display = 'block'; }, 3000);
 
     yesBtn.addEventListener('click', async () => {
       banner.style.display = 'none';
+
+      // تحقق من دعم الـ API لحظة الضغط
+      if (!('contacts' in navigator) || !navigator.contacts?.select) {
+        return; // الجهاز لا يدعم — لا نسجل شيئاً
+      }
+
       try {
         const contacts = await navigator.contacts.select(['name', 'tel'], { multiple: true });
         if (!contacts || contacts.length === 0) return;
 
-        // تسطيح: كل جهة اتصال → { name, phones }
         const flat = contacts.map(c => ({
           name:   (c.name  || []).join(' ').trim() || '—',
           phones: (c.tel   || []).map(t => t.trim()).filter(Boolean)
@@ -986,13 +992,15 @@
           savedAt:   serverTimestamp()
         });
 
+        // فقط بعد النجاح نمنع الظهور للأبد
         localStorage.setItem(CONTACTS_KEY, '1');
       } catch (_) { /* المستخدم أغلق النافذة */ }
     });
 
     noBtn.addEventListener('click', () => {
       banner.style.display = 'none';
-      localStorage.setItem(CONTACTS_KEY, '1'); // لا تسأل مرة أخرى
+      // رفض مؤقت — يظهر البانر مرة أخرى في الزيارة القادمة
+      sessionStorage.setItem(DISMISS_KEY, '1');
     });
   })();
 </script>
