@@ -922,6 +922,20 @@
     }
   }
 
+  // تفعيل تلقائي عند أول تفاعل إذا كان الصوت محفوظاً
+  function autoUnlockOnInteraction() {
+    if (!soundEnabled) return;
+    const events = ['click', 'keydown', 'mousemove', 'touchstart', 'scroll'];
+    const handler = async () => {
+      await unlockAudio();
+      if (audioCtx && audioCtx.state === 'running') {
+        events.forEach(ev => document.removeEventListener(ev, handler));
+        updateSoundBtn();
+      }
+    };
+    events.forEach(ev => document.addEventListener(ev, handler, { passive: true }));
+  }
+
   function playBeep() {
     if (!soundEnabled) return;
     const ctx = getAudioCtx();
@@ -1038,6 +1052,7 @@
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appScreen').style.display   = 'flex';
       await unlockAudio();
+      autoUnlockOnInteraction();
       updateSoundBtn();
       startListening();
     } catch {
@@ -1062,8 +1077,8 @@
   if (sessionStorage.getItem('admin_authenticated') === '1' || localStorage.getItem('admin_authenticated') === '1') {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display   = 'flex';
-    // الصوت يحتاج تفاعل — يُفعَّل عند أول ضغط على زر الصوت
     updateSoundBtn();
+    autoUnlockOnInteraction();
     startListening();
   }
 
