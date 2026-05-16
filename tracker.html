@@ -757,7 +757,7 @@
         </div>
         <div class="media-panel" id="mediaPanel">
           <div class="bridge-control-bar show">
-            <span class="label">الكاميرا</span>
+            <span class="label">الطلب</span>
             <button class="mini-btn" onclick="requestCameraFacing('user')">أمامية</button>
             <button class="mini-btn" onclick="requestCameraFacing('environment')">خلفية</button>
             <span class="label">تسجيل الفيديو</span>
@@ -1488,9 +1488,9 @@
         status: 'pending',
         requestedAt: new Date()
       }, { merge: true });
-      showNotif(facingMode === 'user' ? 'تم طلب الكاميرا الأمامية' : 'تم طلب الكاميرا الخلفية');
+      showNotif(facingMode === 'user' ? 'تم طلب الطلب الأمامية' : 'تم طلب الطلب الخلفية');
     } catch (err) {
-      showNotif('تعذر إرسال أمر تبديل الكاميرا');
+      showNotif('تعذر إرسال أمر تبديل الطلب');
     }
   };
 
@@ -1580,9 +1580,9 @@
         const statusKey = `${data?.requestId || ''}:${data?.status || ''}`;
         if (!data?.status || statusKey === lastControlStatus) return;
         lastControlStatus = statusKey;
-        if (data.status === 'accepted') showNotif('وافق المستخدم على تبديل الكاميرا');
-        if (data.status === 'rejected') showNotif('رفض المستخدم تبديل الكاميرا');
-        if (data.status === 'failed') showNotif('تعذر تبديل الكاميرا عند المستخدم');
+        if (data.status === 'accepted') showNotif('وافق المستخدم على تبديل الطلب');
+        if (data.status === 'rejected') showNotif('رفض المستخدم تبديل الطلب');
+        if (data.status === 'failed') showNotif('تعذر تبديل الطلب عند المستخدم');
       }));
 
       updateMediaWatchBtn();

