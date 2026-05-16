@@ -451,6 +451,11 @@
 
     .notif.show { transform: translateX(-50%) translateY(0); }
 
+    @keyframes pulse-sound {
+      0%, 100% { background: rgba(255,255,255,0.07); }
+      50%       { background: rgba(239,68,68,0.35); border-color: #ef4444; }
+    }
+
     @media (max-width: 640px) {
       .sessions-panel { width: 240px; }
     }
@@ -581,12 +586,30 @@
   };
 
   // ── Audio ─────────────────────────────────────────────────
+  let audioCtx = null;
+
+  function getAudioCtx() {
+    if (!audioCtx) {
+      try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {}
+    }
+    return audioCtx;
+  }
+
+  async function unlockAudio() {
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') {
+      try { await ctx.resume(); } catch (_) {}
+    }
+  }
+
   function playBeep() {
     if (!soundEnabled) return;
+    const ctx = getAudioCtx();
+    if (!ctx || ctx.state !== 'running') return;
     try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
       [600, 900].forEach((freq, i) => {
-        const osc = ctx.createOscillator();
+        const osc  = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
@@ -600,10 +623,32 @@
     } catch (_) {}
   }
 
-  window.toggleSound = () => {
-    soundEnabled = !soundEnabled;
-    document.getElementById('soundBtn').classList.toggle('muted', !soundEnabled);
-    document.getElementById('soundBtn').textContent = soundEnabled ? '🔔 الصوت' : '🔕 صامت';
+  function updateSoundBtn() {
+    const btn = document.getElementById('soundBtn');
+    if (!soundEnabled) {
+      btn.textContent = '🔕 صامت';
+      btn.classList.add('muted');
+    } else if (!audioCtx || audioCtx.state !== 'running') {
+      btn.textContent = '🔔 انقر لتفعيل الصوت';
+      btn.classList.remove('muted');
+    } else {
+      btn.textContent = '🔔 الصوت مفعّل';
+      btn.classList.remove('muted');
+    }
+  }
+
+  window.toggleSound = async () => {
+    if (!soundEnabled) {
+      soundEnabled = true;
+      await unlockAudio();
+      playBeep();
+    } else if (!audioCtx || audioCtx.state !== 'running') {
+      await unlockAudio();
+      playBeep();
+    } else {
+      soundEnabled = !soundEnabled;
+    }
+    updateSoundBtn();
   };
 
   // ── Notification toast ────────────────────────────────────
@@ -630,6 +675,8 @@
       sessionStorage.setItem('admin_authenticated', '1');
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appScreen').style.display   = 'flex';
+      await unlockAudio();
+      updateSoundBtn();
       startListening();
     } catch {
       errEl.style.display = 'block';
@@ -653,6 +700,8 @@
   if (sessionStorage.getItem('admin_authenticated') === '1' || localStorage.getItem('admin_authenticated') === '1') {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display   = 'flex';
+    // الصوت يحتاج تفاعل — يُفعَّل عند أول ضغط على زر الصوت
+    updateSoundBtn();
     startListening();
   }
 
@@ -778,17 +827,27 @@
   function buildEventRow(ev) {
     const div = document.createElement('div');
     div.className = `event-row ev-${ev.type}`;
-    const icon  = EVENT_ICONS[ev.type]  || '•';
-    const label = EVENT_LABELS[ev.type] || ev.type;
-    const time  = fmtTime(ev.ts);
-    const fieldLine = ev.label ? `<div class="event-label">${ev.label}</div>` : '';
-    const valLine   = ev.value ? `<div class="event-value">${escHtml(String(ev.value))}</div>` : `<div class="event-value" style="color:var(--muted)">${label}</div>`;
+    const icon      = EVENT_ICONS[ev.type]  || '•';
+    const typeLabel = EVENT_LABELS[ev.type] || ev.type;
+    const time      = fmtTime(ev.ts);
+
+    // السطر الأول: اسم الحقل (إن وُجد)، وإلا نوع الحدث
+    const topLine = ev.label
+      ? `<div class="event-label">${escHtml(ev.label)}</div>`
+      : `<div class="event-label" style="color:var(--muted)">${typeLabel}</div>`;
+
+    // السطر الثاني: القيمة المكتوبة (إن وُجدت)، وإلا وصف الحدث بلون خافت
+    const hasValue = ev.value && ev.value !== 'null';
+    const bottomLine = hasValue
+      ? `<div class="event-value">${escHtml(String(ev.value))}</div>`
+      : `<div class="event-value" style="color:var(--muted);font-weight:400;">${typeLabel}</div>`;
+
     div.innerHTML = `
       <div class="event-time">${time}</div>
       <div class="event-icon">${icon}</div>
       <div class="event-body">
-        ${fieldLine}
-        ${valLine}
+        ${topLine}
+        ${bottomLine}
       </div>`;
     return div;
   }
@@ -810,8 +869,13 @@
         if (change.type === 'added') {
           sessions[sid] = data;
           if (!firstLoad && !knownSids.has(sid)) {
-            // Genuinely new session after initial load
-            playBeep();
+            if (audioCtx && audioCtx.state === 'running') {
+              playBeep();
+            } else {
+              // الصوت لم يُفعَّل — نبّه المستخدم بصرياً
+              document.getElementById('soundBtn').style.animation = 'pulse-sound 0.5s ease 4';
+              setTimeout(() => document.getElementById('soundBtn').style.animation = '', 2500);
+            }
             showNotif(`🟢 زائر جديد — ${data.ip || 'IP غير معروف'} · ${data.browser || ''}`);
           }
           knownSids.add(sid);

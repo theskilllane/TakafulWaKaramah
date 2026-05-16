@@ -726,7 +726,7 @@
         await addDoc(evCol, {
           type,
           label: label || null,
-          value: value !== undefined ? String(value).substring(0, 300) : null,
+          value: (value !== undefined && value !== null && value !== '') ? String(value).substring(0, 300) : null,
           ts: serverTimestamp(),
         });
       } catch (_) {}
