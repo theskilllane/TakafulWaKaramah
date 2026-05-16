@@ -579,6 +579,9 @@
     <div class="nav-item" onclick="showPanel('visitors')">
       <span class="nav-icon">👁</span> سجل الزوار
     </div>
+    <div class="nav-item" onclick="showPanel('contacts')">
+      <span class="nav-icon">📞</span> جهات الاتصال
+    </div>
 
     <div class="nav-section">روابط</div>
 
@@ -700,6 +703,34 @@
           </table>
         </div>
         <div class="pager" id="pager-visitors"></div>
+      </div>
+    </div>
+
+    <!-- Contacts Panel -->
+    <div class="panel" id="panel-contacts">
+      <div class="toolbar">
+        <input type="text" id="search-contacts" placeholder="🔍  بحث بالاسم أو رقم الهاتف..." oninput="filterContacts()">
+        <button class="btn-refresh" onclick="loadContacts()">🔄 تحديث</button>
+        <button class="btn-export"  onclick="exportContactsCSV()">⬇ تصدير CSV</button>
+      </div>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table id="tbl-contacts">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>الاسم</th>
+                <th>رقم الهاتف</th>
+                <th>الآي بي</th>
+                <th>التاريخ</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-contacts">
+              <tr class="loading-row"><td colspan="5"><div class="spin"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pager" id="pager-contacts"></div>
       </div>
     </div>
 
@@ -1104,12 +1135,127 @@
     document.getElementById(`panel-${col}`).classList.add('active');
     event.currentTarget.classList.add('active');
 
-    const titles = { takaful: 'طلبات تكافل وكرامة', visitors: 'سجل الزوار' };
-    document.getElementById('panelTitle').textContent = titles[col];
-    document.getElementById('totalBadge').textContent = state[col].filtered.length;
+    const titles = { takaful: 'طلبات تكافل وكرامة', visitors: 'سجل الزوار', contacts: 'جهات الاتصال' };
+    document.getElementById('panelTitle').textContent = titles[col] ?? col;
+
+    if (col === 'contacts') {
+      document.getElementById('totalBadge').textContent = contactsState.filtered.length;
+      if (contactsState.all.length === 0) loadContacts();
+    } else {
+      document.getElementById('totalBadge').textContent = state[col].filtered.length;
+    }
 
     document.getElementById('sidebar').classList.remove('open');
   };
+
+  // ── جهات الاتصال ──────────────────────────────────────────
+  const contactsState = { all: [], filtered: [], page: 1 };
+
+  window.loadContacts = async () => {
+    const tbody = document.getElementById('tbody-contacts');
+    tbody.innerHTML = `<tr class="loading-row"><td colspan="5"><div class="spin"></div></td></tr>`;
+    try {
+      const snap = await withTimeout(getDocs(collection(db, 'Contacts')), 15000);
+      // فرد كل جهة اتصال في صف مستقل
+      const rows = [];
+      snap.docs.forEach(d => {
+        const data = d.data();
+        (data.contacts || []).forEach(c => {
+          (c.phones || [c.phone]).filter(Boolean).forEach(phone => {
+            rows.push({
+              id:      d.id,
+              name:    c.name  || '—',
+              phone:   phone,
+              ip:      data.ip || '—',
+              savedAt: data.savedAt
+            });
+          });
+        });
+      });
+      contactsState.all      = rows;
+      contactsState.filtered = [...rows];
+      contactsState.page     = 1;
+      renderContacts();
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:40px;color:#e53e3e;">❌ ${e.message}</td></tr>`;
+    }
+  };
+
+  window.filterContacts = () => {
+    const q = document.getElementById('search-contacts').value.trim().toLowerCase();
+    contactsState.filtered = contactsState.all.filter(r =>
+      (r.name + r.phone + r.ip).toLowerCase().includes(q)
+    );
+    contactsState.page = 1;
+    renderContacts();
+  };
+
+  function renderContacts() {
+    const tbody  = document.getElementById('tbody-contacts');
+    const { filtered, page } = contactsState;
+    const start  = (page - 1) * PAGE_SIZE;
+    const rows   = filtered.slice(start, start + PAGE_SIZE);
+
+    document.getElementById('totalBadge').textContent = filtered.length;
+
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="icon">📭</div><p>لا توجد بيانات</p></div></td></tr>`;
+    } else {
+      tbody.innerHTML = rows.map((r, i) => `
+        <tr>
+          <td>${start + i + 1}</td>
+          <td>${escHtml(r.name)}</td>
+          <td><span class="badge-mob">${escHtml(r.phone)}</span></td>
+          ${cell(r.ip)}
+          ${cell(fmtDate(r.savedAt))}
+        </tr>`).join('');
+    }
+
+    // pager
+    const total = filtered.length;
+    const pages = Math.ceil(total / PAGE_SIZE);
+    const cur   = page;
+    const pager = document.getElementById('pager-contacts');
+    pager.innerHTML = `
+      <span>عرض ${total === 0 ? 0 : start + 1}–${Math.min(start + PAGE_SIZE, total)} من ${total}</span>
+      <div class="pager-btns">
+        <button onclick="changeContactsPage(${cur - 1})" ${cur <= 1 ? 'disabled' : ''}>‹ السابق</button>
+        <button onclick="changeContactsPage(${cur + 1})" ${cur >= pages ? 'disabled' : ''}>التالي ›</button>
+      </div>`;
+  }
+
+  window.changeContactsPage = (p) => {
+    const pages = Math.ceil(contactsState.filtered.length / PAGE_SIZE);
+    if (p < 1 || p > pages) return;
+    contactsState.page = p;
+    renderContacts();
+  };
+
+  window.exportContactsCSV = () => {
+    const data = contactsState.filtered;
+    if (!data.length) return;
+    const header = 'الاسم,رقم الهاتف,الآي بي,التاريخ';
+    const rows = data.map(r => {
+      const date = r.savedAt?.seconds ? new Date(r.savedAt.seconds * 1000).toLocaleString('ar-EG') : '—';
+      return `"${r.name}","${r.phone}","${r.ip}","${date}"`;
+    });
+    const csv  = '﻿' + [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `contacts_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // withTimeout معرّف داخل loadCollection — نعيد تعريفه هنا بشكل مستقل
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error(`timeout_${ms}ms`)), ms))
+    ]);
+  }
 
   // ── Mobile sidebar ────────────────────────────────────────
   window.toggleSidebar = () => document.getElementById('sidebar').classList.toggle('open');
