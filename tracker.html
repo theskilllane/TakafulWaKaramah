@@ -627,7 +627,7 @@
       const { userAdmin, passAdmin } = snap.data();
       if (u !== String(userAdmin ?? '').trim() || p !== String(passAdmin ?? '').trim()) { errEl.style.display = 'block'; return; }
 
-      sessionStorage.setItem('tracker_auth', '1');
+      sessionStorage.setItem('admin_authenticated', '1');
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appScreen').style.display   = 'flex';
       startListening();
@@ -637,7 +637,8 @@
   };
 
   window.doLogout = () => {
-    sessionStorage.removeItem('tracker_auth');
+    sessionStorage.removeItem('admin_authenticated');
+    localStorage.removeItem('admin_authenticated');
     location.reload();
   };
 
@@ -648,8 +649,8 @@
     });
   });
 
-  // Auto-login if session active
-  if (sessionStorage.getItem('tracker_auth')) {
+  // Auto-login if already authenticated in admin
+  if (sessionStorage.getItem('admin_authenticated') === '1' || localStorage.getItem('admin_authenticated') === '1') {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appScreen').style.display   = 'flex';
     startListening();
