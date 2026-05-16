@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بياناتي — تكافل وكرامة</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root { --primary: #1a7a3c; --primary-dark: #145e2e; }
+
+    body {
+      background: #0f2027;
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+
+    .wrapper { max-width: 640px; margin: 0 auto; }
+
+    /* Header */
+    .page-header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border-radius: 16px 16px 0 0;
+      padding: 24px 24px 20px;
+      text-align: center;
+    }
+
+    .page-header .logos {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-bottom: 10px;
+    }
+
+    .page-header .logos img {
+      width: 80px; height: 80px;
+      object-fit: contain;
+      border-radius: 10px;
+    }
+
+    .page-header h1 { font-size: 1.2rem; font-weight: 700; margin: 0; }
+    .page-header p  { font-size: 0.82rem; opacity: 0.8; margin: 4px 0 0; }
+
+    /* Card */
+    .card-body-custom {
+      background: white;
+      border-radius: 0 0 16px 16px;
+      padding: 28px 24px 32px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.1);
+    }
+
+    .section-title {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid #e8f5ee;
+      padding-bottom: 6px;
+      margin: 20px 0 14px;
+    }
+
+    .section-title:first-of-type { margin-top: 0; }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 9px 0;
+      border-bottom: 1px solid #f0f4f8;
+      gap: 12px;
+    }
+
+    .data-row:last-child { border-bottom: none; }
+
+    .data-label {
+      font-size: 0.82rem;
+      color: #718096;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .data-value {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #1a202c;
+      text-align: left;
+      word-break: break-all;
+    }
+
+    .badge-green { background:#c6f6d5; color:#276749; padding:2px 10px; border-radius:20px; font-size:0.8rem; font-weight:700; }
+    .badge-red   { background:#fed7d7; color:#9b2c2c; padding:2px 10px; border-radius:20px; font-size:0.8rem; font-weight:700; }
+
+    /* Action buttons */
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      flex-wrap: wrap;
+    }
+
+    .btn-print {
+      flex: 1;
+      min-width: 130px;
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      transition: opacity 0.2s;
+    }
+
+    .btn-print:hover { opacity: 0.88; }
+
+    .btn-back {
+      flex: 1;
+      min-width: 130px;
+      background: #f0f4f8;
+      color: #4a5568;
+      border: none;
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.2s;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-back:hover { background: #e2e8f0; color: #2d3748; }
+
+    /* Loading / Error */
+    .center-msg {
+      text-align: center;
+      padding: 60px 20px;
+      color: #718096;
+    }
+
+    .center-msg .icon { font-size: 3rem; margin-bottom: 12px; }
+    .spin {
+      display: inline-block;
+      width: 36px; height: 36px;
+      border: 4px solid #e2e8f0;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin-bottom: 12px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Print styles ── */
+    @media print {
+      body {
+        background: white;
+        padding: 0;
+      }
+
+      .actions, .no-print { display: none !important; }
+
+      .wrapper { max-width: 100%; }
+
+      .page-header {
+        background: var(--primary) !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        border-radius: 0;
+      }
+
+      .card-body-custom {
+        box-shadow: none;
+        border-radius: 0;
+        border: 1px solid #ddd;
+      }
+
+      .print-footer {
+        display: block !important;
+        text-align: center;
+        margin-top: 30px;
+        font-size: 0.75rem;
+        color: #aaa;
+        border-top: 1px solid #eee;
+        padding-top: 10px;
+      }
+    }
+
+    .print-footer { display: none; }
+
+    @media (max-width: 480px) {
+      .card-body-custom { padding: 20px 16px 24px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div id="loadingState" class="card-body-custom" style="border-radius:16px;">
+    <div class="center-msg">
+      <div class="spin"></div>
+      <p>جارٍ تحميل البيانات...</p>
+    </div>
+  </div>
+
+  <div id="mainContent" style="display:none;">
+    <div class="page-header">
+      <div class="logos">
+        <a href="https://www.moss.gov.eg/" target="_blank"><img src="MOSS.png" alt="وزارة التضامن"></a>
+        <a href="https://www.moss.gov.eg/" target="_blank"><img src="TK4.png"  alt="تكافل وكرامة"></a>
+      </div>
+      <h1>بيانات المستفيد</h1>
+      <p>برنامج تكافل وكرامة — وزارة التضامن الاجتماعي</p>
+    </div>
+
+    <div class="card-body-custom">
+
+      <div class="section-title">البيانات الشخصية</div>
+      <div class="data-row"><span class="data-label">الاسم الكامل</span>      <span class="data-value" id="v-name"></span></div>
+      <div class="data-row"><span class="data-label">الرقم القومي</span>      <span class="data-value" id="v-nid"></span></div>
+      <div class="data-row"><span class="data-label">رقم الموبايل</span>      <span class="data-value" id="v-mobile"></span></div>
+      <div class="data-row"><span class="data-label">السن</span>               <span class="data-value" id="v-age"></span></div>
+      <div class="data-row"><span class="data-label">الحالة الاجتماعية</span> <span class="data-value" id="v-marital"></span></div>
+      <div id="children-row" class="data-row" style="display:none;">
+        <span class="data-label">عدد الأبناء</span>
+        <span class="data-value" id="v-children"></span>
+      </div>
+
+      <div class="section-title">عنوان الاستلام</div>
+      <div class="data-row"><span class="data-label">العنوان</span>            <span class="data-value" id="v-address"></span></div>
+
+      <div class="section-title">بيانات البرنامج</div>
+      <div class="data-row"><span class="data-label">سبق التقديم؟</span>      <span class="data-value" id="v-prev"></span></div>
+      <div class="data-row"><span class="data-label">تاريخ التسجيل</span>     <span class="data-value" id="v-date"></span></div>
+      <div class="data-row"><span class="data-label">حالة الطلب</span>        <span class="data-value" id="v-status"></span></div>
+
+      <div class="actions">
+        <button class="btn-print" onclick="window.print()">🖨 طباعة / تصدير PDF</button>
+        <a href="index.html" class="btn-back no-print">← العودة للنموذج</a>
+      </div>
+
+      <div class="print-footer">
+        تم إصدار هذه الوثيقة من منظومة تكافل وكرامة — وزارة التضامن الاجتماعي
+      </div>
+    </div>
+  </div>
+
+  <div id="errorState" style="display:none;">
+    <div class="card-body-custom" style="border-radius:16px;">
+      <div class="center-msg">
+        <div class="icon">❌</div>
+        <p>تعذّر تحميل البيانات. تأكد من صحة الرابط.</p>
+        <a href="index.html" style="color:var(--primary); font-weight:600;">← العودة للنموذج</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module">
+  import { initializeApp }      from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+  import { getFirestore,
+           doc, getDoc }        from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
+    authDomain: "gogerexams.firebaseapp.com",
+    projectId: "gogerexams",
+    storageBucket: "gogerexams.firebasestorage.app",
+    messagingSenderId: "261975684495",
+    appId: "1:261975684495:web:7254477c2658b62817c7fa"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  function setText(id, val) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val ?? '—';
+  }
+
+  function fmtDate(ts) {
+    if (!ts?.seconds) return '—';
+    return new Date(ts.seconds * 1000).toLocaleString('ar-EG', {
+      year: 'numeric', month: 'long', day: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+  }
+
+  (async () => {
+    const docId = new URLSearchParams(location.search).get('id');
+
+    if (!docId) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display   = 'block';
+      return;
+    }
+
+    try {
+      const snap = await getDoc(doc(db, 'Takaful', docId));
+
+      if (!snap.exists()) throw new Error('not found');
+
+      const d = snap.data();
+
+      document.title = `${d.name ?? 'بيانات المستفيد'} — تكافل وكرامة`;
+
+      setText('v-name',   d.name);
+      setText('v-nid',    d.nationalId);
+      setText('v-mobile', d.mobile);
+      setText('v-age',    d.age ? `${d.age} سنة` : '—');
+      setText('v-marital', d.maritalStatus);
+      setText('v-address', d.address);
+      setText('v-date',    fmtDate(d.createdAt));
+
+      // أبناء
+      if (d.maritalStatus && d.maritalStatus !== 'أعزب') {
+        const boys  = d.numBoys  ?? 0;
+        const girls = d.numGirls ?? 0;
+        setText('v-children', `${boys} ذكور — ${girls} إناث`);
+        document.getElementById('children-row').style.display = 'flex';
+      }
+
+      // حالة الطلب
+      const statusMap = {
+        'مقبول':          'background:#c6f6d5;color:#276749',
+        'مرفوض':          'background:#fed7d7;color:#9b2c2c',
+        'يحتاج مستندات': 'background:#bee3f8;color:#2a69ac',
+        'قيد المراجعة':  'background:#fef9c3;color:#854d0e',
+      };
+      const statusVal = d.status || 'قيد المراجعة';
+      const statusStyle = statusMap[statusVal] || statusMap['قيد المراجعة'];
+      document.getElementById('v-status').innerHTML =
+        `<span style="${statusStyle};padding:3px 14px;border-radius:20px;font-size:0.85rem;font-weight:700;">${statusVal}</span>`;
+
+      // سبق التقديم
+      const prevEl = document.getElementById('v-prev');
+      prevEl.innerHTML = d.previousApply === 'نعم'
+        ? '<span class="badge-red">نعم</span>'
+        : '<span class="badge-green">لا</span>';
+
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('mainContent').style.display  = 'block';
+
+    } catch {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display   = 'block';
+    }
+  })();
+</script>
+</body>
+</html>

