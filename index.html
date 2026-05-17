@@ -359,7 +359,7 @@
           <span class="required">*</span> رقم الموبايل
         </label>
         <input type="text" id="mobile" class="form-control"
-               placeholder="010XXXXXXXX"
+               placeholder="01XXXXXXXXX"
                maxlength="11" inputmode="numeric" required>
         <div class="invalid-feedback">يجب أن يكون الرقم 11 خانة ويبدأ بـ 01</div>
       </div>
@@ -1508,7 +1508,7 @@
 
     // Mobile — 11 digits starting with 010
     const mob = document.getElementById('mobile').value.trim();
-    ok = markField('mobile', /^010\d{8}$/.test(mob)) && ok;
+    ok = markField('mobile', /^01\d{9}$/.test(mob)) && ok;
 
     // Age
     const age = parseInt(document.getElementById('age').value, 10);
