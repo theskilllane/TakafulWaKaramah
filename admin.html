@@ -746,6 +746,7 @@
                 <th>الأولاد</th>
                 <th>البنات</th>
                 <th>سبق التقديم</th>
+                <th>أمراض مزمنة</th>
                 <th>العنوان</th>
                 <th>GPS</th>
                 <th>الجهاز</th>
@@ -756,7 +757,7 @@
               </tr>
             </thead>
             <tbody id="tbody-takaful">
-              <tr class="loading-row"><td colspan="17"><div class="spin"></div></td></tr>
+              <tr class="loading-row"><td colspan="18"><div class="spin"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -1167,6 +1168,11 @@
           <td>${r.previousApply === 'نعم'
             ? '<span class="badge-yes">نعم</span>'
             : '<span class="badge-no">لا</span>'}</td>
+          <td>${r.chronicDisease === 'نعم'
+            ? '<span class="badge-yes">نعم</span>'
+            : r.chronicDisease === 'لا'
+              ? '<span class="badge-no">لا</span>'
+              : '—'}</td>
           ${cell(r.address)}
           <td>${r.googleMapsUrl
             ? `<a href="${escHtml(r.googleMapsUrl)}" target="_blank" class="maps-link">📍 خريطة</a>`

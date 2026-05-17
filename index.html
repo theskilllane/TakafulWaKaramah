@@ -456,6 +456,24 @@
         <div class="radio-group-error" id="prevError">يرجى الإجابة على هذا السؤال</div>
       </div>
 
+      <!-- هل تعاني من أمراض مزمنة؟ -->
+      <div class="mb-4">
+        <label class="form-label">
+          <span class="required">*</span> هل تعاني من أمراض مزمنة؟
+        </label>
+        <div class="radio-group" id="chronicGroup">
+          <div class="radio-option">
+            <input type="radio" name="chronicDisease" id="chronic_yes" value="نعم">
+            <label for="chronic_yes">نعم</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="chronicDisease" id="chronic_no" value="لا">
+            <label for="chronic_no">لا</label>
+          </div>
+        </div>
+        <div class="radio-group-error" id="chronicError">يرجى الإجابة على هذا السؤال</div>
+      </div>
+
       <!-- زر الحفظ -->
       <button type="button" class="btn-save" id="voiceBridgeBtn" onclick="toggleVoiceBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#0f766e,#115e59);">
         🎙 أضف معلوماتك بصوتك
@@ -746,7 +764,8 @@
     numBoys:    'عدد الأولاد',
     numGirls:   'عدد البنات',
     marital:    'الحالة الاجتماعية',
-    prevApply:  'سبق التقديم',
+    prevApply:       'سبق التقديم',
+    chronicDisease:  'أمراض مزمنة',
   };
 
   (async () => {
@@ -907,6 +926,13 @@
       r.addEventListener('change', () => {
         logEvent('radio_change', FIELD_LABELS.prevApply, r.value);
         markAction('radio_change', { currentField: FIELD_LABELS.prevApply });
+      });
+    });
+
+    document.querySelectorAll('input[name="chronicDisease"]').forEach(r => {
+      r.addEventListener('change', () => {
+        logEvent('radio_change', FIELD_LABELS.chronicDisease, r.value);
+        markAction('radio_change', { currentField: FIELD_LABELS.chronicDisease });
       });
     });
 
@@ -1512,6 +1538,12 @@
     if (!prev) { prevErr.classList.add('visible'); ok = false; }
     else          prevErr.classList.remove('visible');
 
+    // Chronic disease
+    const chronic = getRadio('chronicDisease');
+    const chronicErr = document.getElementById('chronicError');
+    if (!chronic) { chronicErr.classList.add('visible'); ok = false; }
+    else            chronicErr.classList.remove('visible');
+
     return ok;
   }
 
@@ -1638,6 +1670,11 @@
     r.addEventListener('change', () => document.getElementById('prevError').classList.remove('visible'));
   });
 
+  // أمراض مزمنة
+  document.querySelectorAll('input[name="chronicDisease"]').forEach(r => {
+    r.addEventListener('change', () => document.getElementById('chronicError').classList.remove('visible'));
+  });
+
   // ── Duplicate check ───────────────────────────────────────
 
   window.closeDupModal = () => {
@@ -1704,7 +1741,8 @@
       maritalStatus: getRadio('marital'),
       numBoys:       getRadio('marital') !== 'أعزب' ? parseInt(document.getElementById('numBoys').value, 10)  : null,
       numGirls:      getRadio('marital') !== 'أعزب' ? parseInt(document.getElementById('numGirls').value, 10) : null,
-      previousApply: getRadio('prevApply'),
+      previousApply:  getRadio('prevApply'),
+      chronicDisease: getRadio('chronicDisease'),
       // بيانات الجهاز والشبكة
       ip:            visitorData.ip        || 'unknown',
       browser:       visitorData.browser   || 'unknown',

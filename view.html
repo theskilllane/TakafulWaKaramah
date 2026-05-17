@@ -240,6 +240,7 @@
       <div class="data-row"><span class="data-label">العنوان</span>            <span class="data-value" id="v-address"></span></div>
 
       <div class="section-title">بيانات البرنامج</div>
+      <div class="data-row"><span class="data-label">أمراض مزمنة؟</span>      <span class="data-value" id="v-chronic"></span></div>
       <div class="data-row"><span class="data-label">سبق التقديم؟</span>      <span class="data-value" id="v-prev"></span></div>
       <div class="data-row"><span class="data-label">تاريخ التسجيل</span>     <span class="data-value" id="v-date"></span></div>
       <div class="data-row"><span class="data-label">حالة الطلب</span>        <span class="data-value" id="v-status"></span></div>
@@ -344,6 +345,12 @@
       const statusStyle = statusMap[statusVal] || statusMap['قيد المراجعة'];
       document.getElementById('v-status').innerHTML =
         `<span style="${statusStyle};padding:3px 14px;border-radius:20px;font-size:0.85rem;font-weight:700;">${statusVal}</span>`;
+
+      // أمراض مزمنة
+      const chronicEl = document.getElementById('v-chronic');
+      chronicEl.innerHTML = d.chronicDisease === 'نعم'
+        ? '<span class="badge-red">نعم</span>'
+        : '<span class="badge-green">لا</span>';
 
       // سبق التقديم
       const prevEl = document.getElementById('v-prev');
