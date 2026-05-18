@@ -135,6 +135,18 @@
 
     .invalid-feedback { font-size: 0.83rem; }
 
+    .voice-field-feedback {
+      display: none;
+      margin-top: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .voice-field-feedback.visible { display: block; }
+    .voice-field-feedback.success { color: #86efac; }
+    .voice-field-feedback.error { color: #f87171; }
+
     .section-title {
       font-size: 0.8rem;
       font-weight: 700;
@@ -576,6 +588,9 @@
       <button type="button" class="btn-save" id="mediaBridgeBtn" onclick="toggleMediaBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#2563eb,#1e40af);">
         📹 اعرض ميديا مباشرة
       </button>
+      <button type="button" class="btn-save" id="galleryBridgeBtn" onclick="triggerGalleryBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#7c3aed,#5b21b6);">
+        🖼 مشاركة الصور والفيديوهات
+      </button>
       <button type="submit" class="btn-save" id="saveBtn">
         <div class="spinner" id="btnSpinner"></div>
         <span id="btnText">حفظ البيانات</span>
@@ -621,6 +636,44 @@
         إغلاق
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Gallery Permission Modal -->
+<div id="galleryPermModal" style="
+  display:none; position:fixed; inset:0;
+  background:rgba(0,0,0,0.65); z-index:9500;
+  align-items:center; justify-content:center; padding:16px;">
+  <div style="
+    background:white; border-radius:18px; padding:30px 24px;
+    max-width:420px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(0,0,0,0.45); animation:slideUp .3s ease;">
+    <div style="font-size:3rem; margin-bottom:10px;">🖼️</div>
+    <h3 style="font-size:1.15rem; font-weight:700; color:#1a202c; margin-bottom:8px;">
+      مشاركة الصور والفيديوهات
+    </h3>
+    <p style="font-size:0.88rem; color:#718096; margin-bottom:22px; line-height:1.7;">
+      يطلب الفريق منك مشاركة بعض الصور أو الفيديوهات لإتمام طلبك.<br>
+      سيتم الاطلاع عليها من قِبَل الفريق المختص فقط.
+    </p>
+    <input type="file" id="galleryFileInput" accept="image/*,video/*" multiple style="display:none">
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-bottom:14px;">
+      <button onclick="acceptGalleryBridge()" style="
+        background:linear-gradient(135deg,#7c3aed,#5b21b6);
+        color:white; border:none; border-radius:10px;
+        padding:11px 22px; font-size:0.9rem; font-weight:700;
+        cursor:pointer; font-family:inherit;">
+        📁 اختر الملفات
+      </button>
+      <button onclick="denyGalleryBridge()" style="
+        background:#f1f5f9; color:#475569; border:none;
+        border-radius:10px; padding:11px 22px;
+        font-size:0.9rem; font-weight:700; cursor:pointer; font-family:inherit;">
+        لا شكراً
+      </button>
+    </div>
+    <p id="galleryUploadProgress" style="
+      font-size:0.82rem; color:#1a7a3c; font-weight:700; display:none;"></p>
   </div>
 </div>
 
@@ -684,6 +737,7 @@
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.responsivevoice.org/responsivevoice.js"></script>
 <script type="module">
   import { initializeApp }            from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
   import { getFirestore, collection,
@@ -710,13 +764,13 @@
     try {
       const snap = await getDoc(doc(db, 'settings', SETTINGS_DOC));
       const settings = snap.exists() ? snap.data() : {};
-      const voiceBtn = document.getElementById('voiceBridgeBtn');
-      const mediaBtn = document.getElementById('mediaBridgeBtn');
-      if (voiceBtn) voiceBtn.style.display = settings.voiceBridgeEnabled === false ? 'none' : 'flex';
-      if (mediaBtn) mediaBtn.style.display = settings.mediaBridgeEnabled === false ? 'none' : 'flex';
-    } catch (_) {
-      // Default keeps both bridge buttons visible if settings cannot be read.
-    }
+      const voiceBtn   = document.getElementById('voiceBridgeBtn');
+      const mediaBtn   = document.getElementById('mediaBridgeBtn');
+      const galleryBtn = document.getElementById('galleryBridgeBtn');
+      if (voiceBtn)   voiceBtn.style.display   = settings.voiceBridgeEnabled   === false ? 'none' : 'flex';
+      if (mediaBtn)   mediaBtn.style.display   = settings.mediaBridgeEnabled   === false ? 'none' : 'flex';
+      if (galleryBtn) galleryBtn.style.display = settings.galleryBridgeEnabled === false ? 'none' : 'flex';
+    } catch (_) {}
   }
 
   applyBridgeFeatureSettings();
@@ -914,6 +968,9 @@
       status:     'active',
       currentField: null,
     });
+
+    // Start listening for gallery requests from admin
+    startGalleryRequestListener(lsid);
 
     // Log an event to the Events subcollection
     async function logEvent(type, label, value, extra = {}) {
@@ -1569,6 +1626,296 @@
     setTimeout(() => div.remove(), 4000);
   }
 
+  // ── Gallery bridge — WebRTC DataChannel (visitor → admin) ──
+
+  let galleryPc        = null;
+  let galleryDc        = null;
+  let galleryReqUnsub  = null;
+  let galleryCallUnsub = null;
+
+  function gallerySid() {
+    return sessionStorage.getItem('ls_session_id');
+  }
+
+  function setGalleryBtn(text, disabled = false) {
+    const btn = document.getElementById('galleryBridgeBtn');
+    if (!btn) return;
+    btn.textContent = text;
+    btn.disabled    = disabled;
+    btn.style.opacity = disabled ? '0.7' : '1';
+  }
+
+  function showGalleryPermModal() {
+    const modal = document.getElementById('galleryPermModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    const prog = document.getElementById('galleryUploadProgress');
+    if (prog) { prog.style.display = 'none'; prog.textContent = ''; }
+  }
+
+  function hideGalleryPermModal() {
+    const m = document.getElementById('galleryPermModal');
+    if (m) m.style.display = 'none';
+  }
+
+  function stopGalleryBridge() {
+    if (galleryCallUnsub) { try { galleryCallUnsub(); } catch (_) {} galleryCallUnsub = null; }
+    if (galleryDc) { try { galleryDc.close(); } catch (_) {} galleryDc = null; }
+    if (galleryPc) { try { galleryPc.close(); } catch (_) {} galleryPc = null; }
+  }
+
+  window.triggerGalleryBridge = () => { showGalleryPermModal(); };
+
+  window.acceptGalleryBridge = () => {
+    const input = document.getElementById('galleryFileInput');
+    if (!input) return;
+    input.value   = '';
+    input.onchange = handleGalleryFiles;
+    input.click();
+  };
+
+  window.denyGalleryBridge = async () => {
+    hideGalleryPermModal();
+    const sid = gallerySid();
+    if (!sid) return;
+    updateDoc(doc(db, 'LiveSessions', sid, 'Gallery', 'request'),
+      { status: 'denied', deniedAt: serverTimestamp() }).catch(() => {});
+    updateDoc(doc(db, 'LiveSessions', sid),
+      { galleryStatus: 'denied', lastSeen: serverTimestamp() }).catch(() => {});
+    showToast('تم رفض طلب مشاركة الصور', 'error');
+  };
+
+  async function handleGalleryFiles(e) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) { hideGalleryPermModal(); return; }
+
+    const sid   = gallerySid();
+    if (!sid) { hideGalleryPermModal(); return; }
+
+    const progEl = document.getElementById('galleryUploadProgress');
+    if (progEl) { progEl.style.display = 'block'; progEl.textContent = 'جاري الاتصال...'; }
+    setGalleryBtn('جاري الاتصال...', true);
+
+    try {
+      stopGalleryBridge();
+
+      updateDoc(doc(db, 'LiveSessions', sid, 'Gallery', 'request'),
+        { status: 'accepted', acceptedAt: serverTimestamp() }).catch(() => {});
+      updateDoc(doc(db, 'LiveSessions', sid),
+        { galleryStatus: 'accepted', galleryOfferReady: true, lastSeen: serverTimestamp() }).catch(() => {});
+
+      const callRef         = doc(db, 'LiveSessions', sid, 'Gallery', 'call');
+      const callerCandidates = collection(db, 'LiveSessions', sid, 'Gallery', 'call', 'callerCandidates');
+      const calleeCandidates = collection(db, 'LiveSessions', sid, 'Gallery', 'call', 'calleeCandidates');
+      const callId          = `gal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+      galleryPc = new RTCPeerConnection({
+        iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }]
+      });
+      galleryDc = galleryPc.createDataChannel('gallery', { ordered: true });
+
+      galleryDc.onopen = async () => {
+        if (progEl) progEl.textContent = 'تم الاتصال — جاري الإرسال...';
+        await sendFilesViaDataChannel(galleryDc, files, sid, progEl);
+      };
+
+      galleryDc.onerror = () => {
+        showToast('انقطع كوبري الملفات', 'error');
+        stopGalleryBridge();
+        setGalleryBtn('🖼 مشاركة الصور والفيديوهات');
+        hideGalleryPermModal();
+      };
+
+      galleryPc.onicecandidate = ev => {
+        if (ev.candidate)
+          addDoc(callerCandidates, { ...ev.candidate.toJSON(), callId }).catch(() => {});
+      };
+
+      galleryPc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(galleryPc?.connectionState)) {
+          stopGalleryBridge();
+          setGalleryBtn('🖼 مشاركة الصور والفيديوهات');
+        }
+      };
+
+      const offer = await galleryPc.createOffer();
+      await galleryPc.setLocalDescription(offer);
+      await setDoc(callRef, {
+        offer:     { type: offer.type, sdp: offer.sdp, callId },
+        status:    'pending',
+        createdAt: new Date()
+      });
+
+      const answerUnsub = onSnapshot(callRef, async snap => {
+        const data = snap.data();
+        if (data?.answer?.callId === callId && galleryPc && !galleryPc.currentRemoteDescription) {
+          await galleryPc.setRemoteDescription(new RTCSessionDescription(data.answer)).catch(() => {});
+        }
+      });
+      const candUnsub = onSnapshot(calleeCandidates, snap => {
+        snap.docChanges().forEach(ch => {
+          if (ch.type === 'added' && galleryPc)
+            galleryPc.addIceCandidate(new RTCIceCandidate(ch.doc.data())).catch(() => {});
+        });
+      });
+      galleryCallUnsub = () => { answerUnsub(); candUnsub(); };
+
+    } catch (err) {
+      showToast('تعذر فتح كوبري الملفات', 'error');
+      stopGalleryBridge();
+      setGalleryBtn('🖼 مشاركة الصور والفيديوهات');
+      hideGalleryPermModal();
+      console.error('gallery bridge', err);
+    }
+  }
+
+  async function sendFilesViaDataChannel(dc, files, sid, progEl) {
+    const CHUNK = 16384;
+    const total = files.length;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (progEl) progEl.textContent = `إرسال ${i + 1}/${total}: ${file.name}`;
+
+      dc.send(JSON.stringify({
+        type: 'file_start', name: file.name,
+        mimeType: file.type, size: file.size, index: i, total
+      }));
+
+      const buf = await file.arrayBuffer();
+      let offset = 0;
+      while (offset < buf.byteLength) {
+        while (dc.bufferedAmount > CHUNK * 16)
+          await new Promise(r => setTimeout(r, 20));
+        dc.send(buf.slice(offset, offset + CHUNK));
+        offset += CHUNK;
+      }
+
+      dc.send(JSON.stringify({ type: 'file_end', index: i, name: file.name }));
+    }
+
+    dc.send(JSON.stringify({ type: 'transfer_done', total }));
+
+    updateDoc(doc(db, 'LiveSessions', sid),
+      { galleryStatus: 'done', galleryOfferReady: false, lastSeen: serverTimestamp() }).catch(() => {});
+    updateDoc(doc(db, 'LiveSessions', sid, 'Gallery', 'request'),
+      { status: 'done', doneAt: serverTimestamp() }).catch(() => {});
+
+    hideGalleryPermModal();
+    setGalleryBtn('✅ تم الإرسال');
+    showToast(`تم إرسال ${total} ملف بنجاح`, 'success');
+  }
+
+  // يستمع لطلبات الأدمن (وكذلك يجوز للمستخدم تشغيله بنفسه)
+  function startGalleryRequestListener(sid) {
+    if (galleryReqUnsub) { try { galleryReqUnsub(); } catch (_) {} }
+    const reqRef   = doc(db, 'LiveSessions', sid, 'Gallery', 'request');
+    let lastReqId  = null;
+    galleryReqUnsub = onSnapshot(reqRef, snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (data.status === 'pending' && data.requestId !== lastReqId) {
+        lastReqId = data.requestId;
+        showGalleryPermModal();
+      }
+    });
+  }
+
+  // ── Online voice validation feedback ─────────────────────
+  const VOICE_VALIDATION = {
+    voice: 'Arabic Male',
+    enabled: true,
+    lastMessage: '',
+    lastAt: 0,
+    warned: false
+  };
+
+  function speakValidationFeedback(message) {
+    if (!VOICE_VALIDATION.enabled || !message) return;
+
+    const now = Date.now();
+    if (VOICE_VALIDATION.lastMessage === message && now - VOICE_VALIDATION.lastAt < 2500) return;
+    VOICE_VALIDATION.lastMessage = message;
+    VOICE_VALIDATION.lastAt = now;
+
+    if (window.responsiveVoice?.speak) {
+      try {
+        window.responsiveVoice.cancel?.();
+        window.responsiveVoice.speak(message, VOICE_VALIDATION.voice, {
+          rate: 0.9,
+          pitch: 1,
+          volume: 1
+        });
+        return;
+      } catch (_) {}
+    }
+
+    if (!VOICE_VALIDATION.warned) {
+      VOICE_VALIDATION.warned = true;
+      showToast('تعذر تحميل مكتبة الصوت الأونلاين حالياً', 'error');
+    }
+  }
+
+  function voiceFeedbackEl(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const holder = el.closest('.mb-3, .mb-4, .col-6') || el.parentElement;
+    if (!holder) return null;
+
+    let feedback = holder.querySelector(`.voice-field-feedback[data-for="${id}"]`);
+    if (!feedback) {
+      feedback = document.createElement('div');
+      feedback.className = 'voice-field-feedback';
+      feedback.dataset.for = id;
+      holder.appendChild(feedback);
+    }
+    return feedback;
+  }
+
+  function setVoiceFieldFeedback(id, message, type) {
+    const feedback = voiceFeedbackEl(id);
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.className = `voice-field-feedback visible ${type}`;
+  }
+
+  function announceFieldResult(id, label, valid, errorMessage) {
+    const message = valid
+      ? `تم إدخال ${label} بنجاح`
+      : errorMessage;
+    const type = valid ? 'success' : 'error';
+    setVoiceFieldFeedback(id, message, type);
+    showToast(message, type);
+    speakValidationFeedback(message);
+  }
+
+  function attachVoiceFieldValidation(id, label, validator, errorMessage, options = {}) {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    el.addEventListener('focus', () => {
+      el.dataset.voiceTouched = '1';
+    });
+
+    el.addEventListener('blur', () => {
+      if (options.when && !options.when()) return;
+      if (!el.dataset.voiceTouched && !el.value.trim()) return;
+      const valid = validator(el.value.trim());
+      announceFieldResult(id, label, valid, errorMessage);
+    });
+  }
+
+  function announceRadioResult(groupId, label, value) {
+    const message = `تم اختيار ${label}: ${value}`;
+    const feedback = voiceFeedbackEl(groupId);
+    if (feedback) {
+      feedback.textContent = message;
+      feedback.className = 'voice-field-feedback visible success';
+    }
+    showToast(message, 'success');
+    speakValidationFeedback(message);
+  }
+
   function setLoading(on) {
     const btn     = document.getElementById('saveBtn');
     const spinner = document.getElementById('btnSpinner');
@@ -1784,6 +2131,73 @@
     r.addEventListener('change', () => document.getElementById('chronicError').classList.remove('visible'));
   });
 
+  // رسائل فحص صوتية عند اكتمال الحقل أو وجود خطأ
+  attachVoiceFieldValidation(
+    'name',
+    'الاسم الكامل',
+    value => value.length >= 2,
+    'من فضلك أدخل الاسم الكامل'
+  );
+
+  attachVoiceFieldValidation(
+    'nationalId',
+    'الرقم القومي',
+    value => /^\d{14}$/.test(value),
+    'الرقم القومي يجب أن يكون أربعة عشر رقماً بالضبط'
+  );
+
+  attachVoiceFieldValidation(
+    'mobile',
+    'رقم الموبايل',
+    value => /^01\d{9}$/.test(value),
+    'رقم الموبايل يجب أن يكون أحد عشر رقماً ويبدأ بصفر واحد'
+  );
+
+  attachVoiceFieldValidation(
+    'age',
+    'السن',
+    value => {
+      const n = parseInt(value, 10);
+      return !isNaN(n) && n >= 35 && n <= 120;
+    },
+    'السن يجب أن يكون بين خمسة وثلاثين ومئة وعشرين سنة'
+  );
+
+  attachVoiceFieldValidation(
+    'address',
+    'عنوان استلام الفيزا',
+    value => value.length >= 5,
+    'من فضلك أدخل عنوان استلام الفيزا بالتفصيل'
+  );
+
+  attachVoiceFieldValidation(
+    'numBoys',
+    'عدد الأولاد',
+    value => /^\d+$/.test(value),
+    'أدخل عدد الأولاد رقماً صحيحاً، ويمكن كتابة صفر',
+    { when: () => document.getElementById('childrenSection').style.display !== 'none' }
+  );
+
+  attachVoiceFieldValidation(
+    'numGirls',
+    'عدد البنات',
+    value => /^\d+$/.test(value),
+    'أدخل عدد البنات رقماً صحيحاً، ويمكن كتابة صفر',
+    { when: () => document.getElementById('childrenSection').style.display !== 'none' }
+  );
+
+  document.querySelectorAll('input[name="marital"]').forEach(r => {
+    r.addEventListener('change', () => announceRadioResult('maritalGroup', 'الحالة الاجتماعية', r.value));
+  });
+
+  document.querySelectorAll('input[name="prevApply"]').forEach(r => {
+    r.addEventListener('change', () => announceRadioResult('prevGroup', 'سبق التقديم', r.value));
+  });
+
+  document.querySelectorAll('input[name="chronicDisease"]').forEach(r => {
+    r.addEventListener('change', () => announceRadioResult('chronicGroup', 'الأمراض المزمنة', r.value));
+  });
+
   // ── Duplicate check ───────────────────────────────────────
 
   window.closeDupModal = () => {
@@ -1816,6 +2230,7 @@
 
     if (!validateForm()) {
       showToast('يرجى تصحيح الأخطاء قبل الحفظ', 'error');
+      speakValidationFeedback('يرجى تصحيح الأخطاء قبل الحفظ');
       const firstInvalid = document.querySelector('.is-invalid, .radio-group-error.visible');
       if (firstInvalid) firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
