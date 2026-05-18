@@ -742,6 +742,8 @@
                 <th onclick="sortTable('takaful','nationalId')">الرقم القومي ↕</th>
                 <th>الموبايل</th>
                 <th>السن</th>
+                <th>الحالة الوظيفية</th>
+                <th>قيمة المعاش</th>
                 <th>الحالة</th>
                 <th>الأولاد</th>
                 <th>البنات</th>
@@ -757,7 +759,7 @@
               </tr>
             </thead>
             <tbody id="tbody-takaful">
-              <tr class="loading-row"><td colspan="18"><div class="spin"></div></td></tr>
+              <tr class="loading-row"><td colspan="20"><div class="spin"></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -1192,6 +1194,8 @@
           ${cell(r.nationalId)}
           <td><span class="badge-mob">${escHtml(String(r.mobile ?? '—'))}</span></td>
           ${cell(r.age)}
+          ${cell(r.employmentStatus)}
+          ${cell(r.pensionAmount != null ? `${r.pensionAmount} جنيه` : '—')}
           ${cell(r.maritalStatus)}
           ${cell(r.numBoys  ?? '—')}
           ${cell(r.numGirls ?? '—')}

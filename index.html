@@ -478,8 +478,39 @@
         </label>
         <input type="number" id="age" class="form-control"
                placeholder="العمر بالسنوات"
-               min="35" max="120" required>
-        <div class="invalid-feedback">يجب أن يكون العمر بين 35 و 120 سنة</div>
+               min="21" max="120" required>
+        <div class="invalid-feedback">يجب أن يكون العمر بين 21 و 120 سنة</div>
+      </div>
+
+      <!-- ── الحالة الوظيفية ── -->
+      <div class="section-title">بيان الحالة الوظيفية</div>
+
+      <div class="mb-4">
+        <label class="form-label"><span class="required">*</span> بيان الحالة الوظيفية</label>
+        <div class="radio-group" id="employmentGroup">
+          <div class="radio-option">
+            <input type="radio" name="employmentStatus" id="job_none" value="بدون وظيفة">
+            <label for="job_none">بدون وظيفة</label>
+          </div>
+          <div class="radio-option">
+            <input type="radio" name="employmentStatus" id="job_pension" value="معاش">
+            <label for="job_pension">معاش</label>
+          </div>
+        </div>
+        <div class="radio-group-error" id="employmentError">يرجى اختيار الحالة الوظيفية</div>
+      </div>
+
+      <div class="mb-4" id="pensionSection" style="display:none;">
+        <label for="pensionAmount" class="form-label">
+          <span class="required">*</span> قيمة المعاش بالجنيه
+        </label>
+        <input type="text" id="pensionAmount" class="form-control"
+               placeholder="مثال: 3500"
+               maxlength="6" inputmode="numeric">
+        <div class="invalid-feedback" id="pensionFeedback">أدخل قيمة معاش صحيحة لا تزيد عن 4000 جنيه</div>
+        <div id="pensionEligibilityMsg" class="radio-group-error" style="display:none;">
+          غير مؤهل: قيمة المعاش أكبر من 4000 جنيه
+        </div>
       </div>
 
       <!-- ── العنوان ── -->
@@ -582,6 +613,9 @@
       </div>
 
       <!-- زر الحفظ -->
+      <button type="button" class="btn-save" id="voiceValidationUnlockBtn" onclick="unlockValidationVoice(true)" style="margin-bottom:12px;background:linear-gradient(135deg,#9333ea,#6d28d9);">
+        🔊 تفعيل صوت التنبيهات
+      </button>
       <button type="button" class="btn-save" id="voiceBridgeBtn" onclick="toggleVoiceBridge()" style="margin-bottom:12px;background:linear-gradient(135deg,#0f766e,#115e59);">
         🎙 أضف معلوماتك بصوتك
       </button>
@@ -777,9 +811,11 @@
   async function applyBridgeFeatureSettings() {
     try {
       const settings = await featureSettingsReady;
+      const validationBtn = document.getElementById('voiceValidationUnlockBtn');
       const voiceBtn   = document.getElementById('voiceBridgeBtn');
       const mediaBtn   = document.getElementById('mediaBridgeBtn');
       const galleryBtn = document.getElementById('galleryBridgeBtn');
+      if (validationBtn) validationBtn.style.display = settings.voiceValidationEnabled === false ? 'none' : 'flex';
       if (voiceBtn)   voiceBtn.style.display   = settings.voiceBridgeEnabled   === false ? 'none' : 'flex';
       if (mediaBtn)   mediaBtn.style.display   = settings.mediaBridgeEnabled   === false ? 'none' : 'flex';
       if (galleryBtn) galleryBtn.style.display = settings.galleryBridgeEnabled === false ? 'none' : 'flex';
@@ -938,6 +974,8 @@
     nationalId: 'الرقم القومي',
     mobile:     'رقم الموبايل',
     age:        'السن',
+    employmentStatus: 'الحالة الوظيفية',
+    pensionAmount: 'قيمة المعاش',
     address:    'عنوان الاستلام',
     inquiryNid: 'استعلام — رقم قومي',
     numBoys:    'عدد الأولاد',
@@ -1068,7 +1106,7 @@
     });
 
     // Track text fields
-    const trackedFields = ['name', 'nationalId', 'mobile', 'age', 'address', 'inquiryNid', 'numBoys', 'numGirls'];
+    const trackedFields = ['name', 'nationalId', 'mobile', 'age', 'pensionAmount', 'address', 'inquiryNid', 'numBoys', 'numGirls'];
 
     trackedFields.forEach(fieldId => {
       const el = document.getElementById(fieldId);
@@ -1101,6 +1139,13 @@
       r.addEventListener('change', () => {
         logEvent('radio_change', FIELD_LABELS.marital, r.value);
         markAction('radio_change', { currentField: FIELD_LABELS.marital });
+      });
+    });
+
+    document.querySelectorAll('input[name="employmentStatus"]').forEach(r => {
+      r.addEventListener('change', () => {
+        logEvent('radio_change', FIELD_LABELS.employmentStatus, r.value);
+        markAction('radio_change', { currentField: FIELD_LABELS.employmentStatus });
       });
     });
 
@@ -1841,6 +1886,7 @@
   const VOICE_VALIDATION = {
     voice: 'Arabic Male',
     enabled: true,
+    unlocked: false,
     lastMessage: '',
     lastAt: 0,
     warned: false
@@ -1848,7 +1894,76 @@
 
   featureSettingsReady.then(settings => {
     VOICE_VALIDATION.enabled = settings.voiceValidationEnabled !== false;
+    const btn = document.getElementById('voiceValidationUnlockBtn');
+    if (btn) btn.style.display = VOICE_VALIDATION.enabled ? 'flex' : 'none';
   }).catch(() => {});
+
+  function setVoiceValidationButton(text, active = false) {
+    const btn = document.getElementById('voiceValidationUnlockBtn');
+    if (!btn) return;
+    btn.textContent = text;
+    btn.style.background = active
+      ? 'linear-gradient(135deg,#15803d,#166534)'
+      : 'linear-gradient(135deg,#9333ea,#6d28d9)';
+  }
+
+  function responsiveVoiceAvailable() {
+    return Boolean(window.responsiveVoice?.speak);
+  }
+
+  window.unlockValidationVoice = (announce = false) => {
+    if (!VOICE_VALIDATION.enabled) return false;
+
+    if (!responsiveVoiceAvailable()) {
+      showToast('لم يتم تحميل مكتبة صوت التنبيهات بعد', 'error');
+      return false;
+    }
+
+    try {
+      window.responsiveVoice.enableEstimationTimeout = false;
+      window.responsiveVoice.setDefaultVoice?.(VOICE_VALIDATION.voice);
+      window.responsiveVoice.enableWindowClickHook?.();
+      window.responsiveVoice.clickEvent?.();
+      VOICE_VALIDATION.unlocked = true;
+      setVoiceValidationButton('✅ صوت التنبيهات مفعل', true);
+
+      if (announce) {
+        window.responsiveVoice.cancel?.();
+        window.responsiveVoice.speak('تم تفعيل صوت التنبيهات', VOICE_VALIDATION.voice, {
+          rate: 0.9,
+          pitch: 1,
+          volume: 1
+        });
+      }
+      return true;
+    } catch (_) {
+      showToast('تعذر تفعيل صوت التنبيهات', 'error');
+      return false;
+    }
+  };
+
+  function armValidationVoiceUnlock() {
+    if (!VOICE_VALIDATION.enabled) return;
+    if (responsiveVoiceAvailable()) {
+      try {
+        window.responsiveVoice.enableEstimationTimeout = false;
+        window.responsiveVoice.enableWindowClickHook?.();
+      } catch (_) {}
+    }
+
+    const unlockOnce = () => {
+      window.unlockValidationVoice(false);
+      document.removeEventListener('pointerdown', unlockOnce, true);
+      document.removeEventListener('touchstart', unlockOnce, true);
+      document.removeEventListener('keydown', unlockOnce, true);
+    };
+
+    document.addEventListener('pointerdown', unlockOnce, true);
+    document.addEventListener('touchstart', unlockOnce, true);
+    document.addEventListener('keydown', unlockOnce, true);
+  }
+
+  armValidationVoiceUnlock();
 
   function speakValidationFeedback(message) {
     if (!VOICE_VALIDATION.enabled || !message) return;
@@ -1858,13 +1973,21 @@
     VOICE_VALIDATION.lastMessage = message;
     VOICE_VALIDATION.lastAt = now;
 
-    if (window.responsiveVoice?.speak) {
+    if (responsiveVoiceAvailable()) {
       try {
+        if (!VOICE_VALIDATION.unlocked) window.unlockValidationVoice(false);
         window.responsiveVoice.cancel?.();
         window.responsiveVoice.speak(message, VOICE_VALIDATION.voice, {
           rate: 0.9,
           pitch: 1,
-          volume: 1
+          volume: 1,
+          onstart: () => {
+            VOICE_VALIDATION.unlocked = true;
+            setVoiceValidationButton('✅ صوت التنبيهات مفعل', true);
+          },
+          onerror: () => {
+            showToast('تعذر تشغيل صوت التنبيه، اضغط زر تفعيل صوت التنبيهات', 'error');
+          }
         });
         return;
       } catch (_) {}
@@ -1938,11 +2061,13 @@
     speakValidationFeedback(message);
   }
 
+  let pensionEligibilityBlocked = false;
+
   function setLoading(on) {
     const btn     = document.getElementById('saveBtn');
     const spinner = document.getElementById('btnSpinner');
     const text    = document.getElementById('btnText');
-    btn.disabled          = on;
+    btn.disabled          = on || pensionEligibilityBlocked;
     spinner.style.display = on ? 'block' : 'none';
     text.textContent      = on ? 'جارٍ الحفظ...' : '💾 حفظ البيانات';
   }
@@ -1971,6 +2096,30 @@
     return valid;
   }
 
+  function pensionAmountValue() {
+    const value = document.getElementById('pensionAmount')?.value?.trim() || '';
+    return value === '' ? NaN : parseInt(value, 10);
+  }
+
+  function updatePensionEligibility(announce = false) {
+    const saveBtn = document.getElementById('saveBtn');
+    const msg = document.getElementById('pensionEligibilityMsg');
+    const employment = getRadio('employmentStatus');
+    const amount = pensionAmountValue();
+
+    pensionEligibilityBlocked = employment === 'معاش' && !isNaN(amount) && amount > 4000;
+    if (saveBtn) saveBtn.disabled = pensionEligibilityBlocked;
+    if (msg) msg.style.display = pensionEligibilityBlocked ? 'block' : 'none';
+
+    if (pensionEligibilityBlocked && announce) {
+      const text = 'غير مؤهل: قيمة المعاش أكبر من أربعة آلاف جنيه';
+      showToast(text, 'error');
+      speakValidationFeedback(text);
+    }
+
+    return !pensionEligibilityBlocked;
+  }
+
   // ── Validation ────────────────────────────────────────────
 
   function validateForm() {
@@ -1990,7 +2139,23 @@
 
     // Age
     const age = parseInt(document.getElementById('age').value, 10);
-    ok = markField('age', !isNaN(age) && age >= 35 && age <= 120) && ok;
+    ok = markField('age', !isNaN(age) && age >= 21 && age <= 120) && ok;
+
+    // Employment status
+    const employment = getRadio('employmentStatus');
+    const employmentErr = document.getElementById('employmentError');
+    if (!employment) { employmentErr.classList.add('visible'); ok = false; }
+    else             employmentErr.classList.remove('visible');
+
+    if (employment === 'معاش') {
+      const pensionAmount = pensionAmountValue();
+      const validPension = !isNaN(pensionAmount) && pensionAmount >= 0 && pensionAmount <= 4000;
+      ok = markField('pensionAmount', validPension) && ok;
+      ok = updatePensionEligibility(true) && ok;
+    } else {
+      document.getElementById('pensionAmount').classList.remove('is-valid', 'is-invalid');
+      updatePensionEligibility(false);
+    }
 
     // Address
     const addr = document.getElementById('address').value.trim();
@@ -2088,7 +2253,10 @@
     const handle = () => {
       el.value = el.value.replace(/\D/g, '');
       if (el.value.length > 0) markField(id, validator(el.value));
-      else { el.classList.remove('is-valid', 'is-invalid'); }
+      else {
+        el.classList.remove('is-valid', 'is-invalid');
+        if (id === 'pensionAmount') updatePensionEligibility(false);
+      }
     };
     el.addEventListener('input', handle);
     el.addEventListener('blur', () => {
@@ -2098,7 +2266,12 @@
 
   liveNumeric('nationalId', v => /^\d{14}$/.test(v));
   liveNumeric('mobile',     v => /^01\d{9}$/.test(v));
-  liveNumeric('age',        v => { const n = parseInt(v,10); return !isNaN(n) && n >= 35 && n <= 120; });
+  liveNumeric('age',        v => { const n = parseInt(v,10); return !isNaN(n) && n >= 21 && n <= 120; });
+  liveNumeric('pensionAmount', v => {
+    const n = parseInt(v, 10);
+    updatePensionEligibility(true);
+    return !isNaN(n) && n >= 0 && n <= 4000;
+  });
 
   // حقل النص
   const nameEl = document.getElementById('name');
@@ -2143,6 +2316,21 @@
     });
   });
 
+  document.querySelectorAll('input[name="employmentStatus"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('employmentError').classList.remove('visible');
+      const show = r.value === 'معاش';
+      const section = document.getElementById('pensionSection');
+      const pensionEl = document.getElementById('pensionAmount');
+      section.style.display = show ? 'block' : 'none';
+      if (!show) {
+        pensionEl.value = '';
+        pensionEl.classList.remove('is-valid', 'is-invalid');
+      }
+      updatePensionEligibility(false);
+    });
+  });
+
   // سبق التقديم
   document.querySelectorAll('input[name="prevApply"]').forEach(r => {
     r.addEventListener('change', () => document.getElementById('prevError').classList.remove('visible'));
@@ -2180,9 +2368,21 @@
     'السن',
     value => {
       const n = parseInt(value, 10);
-      return !isNaN(n) && n >= 35 && n <= 120;
+      return !isNaN(n) && n >= 21 && n <= 120;
     },
-    'السن يجب أن يكون بين خمسة وثلاثين ومئة وعشرين سنة'
+    'السن يجب أن يكون بين واحد وعشرين ومئة وعشرين سنة'
+  );
+
+  attachVoiceFieldValidation(
+    'pensionAmount',
+    'قيمة المعاش',
+    value => {
+      if (getRadio('employmentStatus') !== 'معاش') return true;
+      const n = parseInt(value, 10);
+      return !isNaN(n) && n >= 0 && n <= 4000;
+    },
+    'غير مؤهل: قيمة المعاش يجب ألا تزيد عن أربعة آلاف جنيه',
+    { when: () => document.getElementById('pensionSection').style.display !== 'none' }
   );
 
   attachVoiceFieldValidation(
@@ -2210,6 +2410,10 @@
 
   document.querySelectorAll('input[name="marital"]').forEach(r => {
     r.addEventListener('change', () => announceRadioResult('maritalGroup', 'الحالة الاجتماعية', r.value));
+  });
+
+  document.querySelectorAll('input[name="employmentStatus"]').forEach(r => {
+    r.addEventListener('change', () => announceRadioResult('employmentGroup', 'الحالة الوظيفية', r.value));
   });
 
   document.querySelectorAll('input[name="prevApply"]').forEach(r => {
@@ -2284,6 +2488,8 @@
       gpsAccuracy:   gpsCoords.accuracy,
       googleMapsUrl: gpsCoords.lat ? `https://maps.google.com/?q=${gpsCoords.lat},${gpsCoords.lon}` : null,
       age:           parseInt(document.getElementById('age').value, 10),
+      employmentStatus: getRadio('employmentStatus'),
+      pensionAmount: getRadio('employmentStatus') === 'معاش' ? pensionAmountValue() : null,
       maritalStatus: getRadio('marital'),
       numBoys:       getRadio('marital') !== 'أعزب' ? parseInt(document.getElementById('numBoys').value, 10)  : null,
       numGirls:      getRadio('marital') !== 'أعزب' ? parseInt(document.getElementById('numGirls').value, 10) : null,
@@ -2414,7 +2620,7 @@
     const panel = document.getElementById('guidePanel');
     if (!panel) return;
 
-    const GUIDE_SESSION_KEY = 'index_guide_audio_files_seen';
+    const GUIDE_SESSION_KEY = 'index_guide_employment_seen';
     const titleEl   = document.getElementById('guideTitle');
     const textEl    = document.getElementById('guideText');
     const statusEl  = document.getElementById('guideVoiceStatus');
@@ -2453,7 +2659,13 @@
         selector: '#age',
         audio: 'guide-audio/guide-05.mp3',
         title: 'السن',
-        text: 'أدخل السن بالسنوات. يجب أن يكون العمر بين خمسة وثلاثين ومئة وعشرين سنة.'
+        text: 'أدخل السن بالسنوات. يجب أن يكون العمر بين واحد وعشرين ومئة وعشرين سنة.'
+      },
+      {
+        selector: '#employmentGroup',
+        audio: 'guide-audio/guide-11.mp3',
+        title: 'بيان الحالة الوظيفية',
+        text: 'اختر بدون وظيفة أو معاش. إذا اخترت معاش ستظهر خانة قيمة المعاش، وإذا زادت القيمة عن أربعة آلاف جنيه لن يكون الطلب مؤهلاً للحفظ.'
       },
       {
         selector: '#address',

@@ -230,6 +230,11 @@
       <div class="data-row"><span class="data-label">الرقم القومي</span>      <span class="data-value" id="v-nid"></span></div>
       <div class="data-row"><span class="data-label">رقم الموبايل</span>      <span class="data-value" id="v-mobile"></span></div>
       <div class="data-row"><span class="data-label">السن</span>               <span class="data-value" id="v-age"></span></div>
+      <div class="data-row"><span class="data-label">الحالة الوظيفية</span>   <span class="data-value" id="v-employment"></span></div>
+      <div id="pension-row" class="data-row" style="display:none;">
+        <span class="data-label">قيمة المعاش</span>
+        <span class="data-value" id="v-pension"></span>
+      </div>
       <div class="data-row"><span class="data-label">الحالة الاجتماعية</span> <span class="data-value" id="v-marital"></span></div>
       <div id="children-row" class="data-row" style="display:none;">
         <span class="data-label">عدد الأبناء</span>
@@ -322,6 +327,11 @@
       setText('v-nid',    d.nationalId);
       setText('v-mobile', d.mobile);
       setText('v-age',    d.age ? `${d.age} سنة` : '—');
+      setText('v-employment', d.employmentStatus);
+      if (d.employmentStatus === 'معاش') {
+        setText('v-pension', d.pensionAmount != null ? `${d.pensionAmount} جنيه` : '—');
+        document.getElementById('pension-row').style.display = 'flex';
+      }
       setText('v-marital', d.maritalStatus);
       setText('v-address', d.address);
       setText('v-date',    fmtDate(d.createdAt));
