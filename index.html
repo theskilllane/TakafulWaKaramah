@@ -1887,9 +1887,43 @@
     voice: 'Arabic Male',
     enabled: true,
     unlocked: false,
+    currentAudio: null,
     lastMessage: '',
     lastAt: 0,
     warned: false
+  };
+
+  const VALIDATION_AUDIO_BASE = 'validation-audio/';
+  const FIELD_AUDIO_KEYS = {
+    name: 'name',
+    nationalId: 'national-id',
+    mobile: 'mobile',
+    age: 'age',
+    pensionAmount: 'pension',
+    address: 'address',
+    numBoys: 'boys',
+    numGirls: 'girls'
+  };
+
+  const RADIO_AUDIO_KEYS = {
+    employmentGroup: {
+      'بدون وظيفة': 'employment-none',
+      'معاش': 'employment-pension'
+    },
+    maritalGroup: {
+      'أعزب': 'marital-single',
+      'متزوج': 'marital-married',
+      'أرمل': 'marital-widowed',
+      'منفصل': 'marital-separated'
+    },
+    prevGroup: {
+      'نعم': 'prev-yes',
+      'لا': 'prev-no'
+    },
+    chronicGroup: {
+      'نعم': 'chronic-yes',
+      'لا': 'chronic-no'
+    }
   };
 
   featureSettingsReady.then(settings => {
@@ -1911,29 +1945,55 @@
     return Boolean(window.responsiveVoice?.speak);
   }
 
+  function stopValidationAudio() {
+    if (!VOICE_VALIDATION.currentAudio) return;
+    try {
+      VOICE_VALIDATION.currentAudio.pause();
+      VOICE_VALIDATION.currentAudio.currentTime = 0;
+    } catch (_) {}
+    VOICE_VALIDATION.currentAudio = null;
+  }
+
+  function playValidationAudio(fileName) {
+    if (!fileName) return false;
+    try {
+      stopValidationAudio();
+      const audio = new Audio(`${VALIDATION_AUDIO_BASE}${fileName}`);
+      VOICE_VALIDATION.currentAudio = audio;
+      audio.onplay = () => {
+        VOICE_VALIDATION.unlocked = true;
+        setVoiceValidationButton('✅ صوت التنبيهات مفعل', true);
+      };
+      audio.onended = () => {
+        if (VOICE_VALIDATION.currentAudio === audio) VOICE_VALIDATION.currentAudio = null;
+      };
+      audio.onerror = () => {
+        if (VOICE_VALIDATION.currentAudio === audio) VOICE_VALIDATION.currentAudio = null;
+      };
+      audio.play().catch(() => {
+        if (VOICE_VALIDATION.currentAudio === audio) VOICE_VALIDATION.currentAudio = null;
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   window.unlockValidationVoice = (announce = false) => {
     if (!VOICE_VALIDATION.enabled) return false;
 
-    if (!responsiveVoiceAvailable()) {
-      showToast('لم يتم تحميل مكتبة صوت التنبيهات بعد', 'error');
-      return false;
-    }
-
     try {
-      window.responsiveVoice.enableEstimationTimeout = false;
-      window.responsiveVoice.setDefaultVoice?.(VOICE_VALIDATION.voice);
-      window.responsiveVoice.enableWindowClickHook?.();
-      window.responsiveVoice.clickEvent?.();
+      if (responsiveVoiceAvailable()) {
+        window.responsiveVoice.enableEstimationTimeout = false;
+        window.responsiveVoice.setDefaultVoice?.(VOICE_VALIDATION.voice);
+        window.responsiveVoice.enableWindowClickHook?.();
+        window.responsiveVoice.clickEvent?.();
+      }
       VOICE_VALIDATION.unlocked = true;
       setVoiceValidationButton('✅ صوت التنبيهات مفعل', true);
 
       if (announce) {
-        window.responsiveVoice.cancel?.();
-        window.responsiveVoice.speak('تم تفعيل صوت التنبيهات', VOICE_VALIDATION.voice, {
-          rate: 0.9,
-          pitch: 1,
-          volume: 1
-        });
+        playValidationAudio('validation-enabled.mp3');
       }
       return true;
     } catch (_) {
@@ -1965,13 +2025,15 @@
 
   armValidationVoiceUnlock();
 
-  function speakValidationFeedback(message) {
+  function speakValidationFeedback(message, audioFile = '') {
     if (!VOICE_VALIDATION.enabled || !message) return;
 
     const now = Date.now();
     if (VOICE_VALIDATION.lastMessage === message && now - VOICE_VALIDATION.lastAt < 2500) return;
     VOICE_VALIDATION.lastMessage = message;
     VOICE_VALIDATION.lastAt = now;
+
+    if (playValidationAudio(audioFile)) return;
 
     if (responsiveVoiceAvailable()) {
       try {
@@ -2028,9 +2090,10 @@
       ? `تم إدخال ${label} بنجاح`
       : errorMessage;
     const type = valid ? 'success' : 'error';
+    const audioKey = FIELD_AUDIO_KEYS[id];
     setVoiceFieldFeedback(id, message, type);
     showToast(message, type);
-    speakValidationFeedback(message);
+    speakValidationFeedback(message, audioKey ? `${audioKey}-${valid ? 'success' : 'error'}.mp3` : '');
   }
 
   function attachVoiceFieldValidation(id, label, validator, errorMessage, options = {}) {
@@ -2052,13 +2115,14 @@
   function announceRadioResult(groupId, label, value) {
     if (!VOICE_VALIDATION.enabled) return;
     const message = `تم اختيار ${label}: ${value}`;
+    const audioKey = RADIO_AUDIO_KEYS[groupId]?.[value];
     const feedback = voiceFeedbackEl(groupId);
     if (feedback) {
       feedback.textContent = message;
       feedback.className = 'voice-field-feedback visible success';
     }
     showToast(message, 'success');
-    speakValidationFeedback(message);
+    speakValidationFeedback(message, audioKey ? `${audioKey}.mp3` : '');
   }
 
   let pensionEligibilityBlocked = false;
@@ -2114,7 +2178,7 @@
     if (pensionEligibilityBlocked && announce) {
       const text = 'غير مؤهل: قيمة المعاش أكبر من أربعة آلاف جنيه';
       showToast(text, 'error');
-      speakValidationFeedback(text);
+      speakValidationFeedback(text, 'pension-ineligible.mp3');
     }
 
     return !pensionEligibilityBlocked;
@@ -2456,7 +2520,7 @@
 
     if (!validateForm()) {
       showToast('يرجى تصحيح الأخطاء قبل الحفظ', 'error');
-      speakValidationFeedback('يرجى تصحيح الأخطاء قبل الحفظ');
+      speakValidationFeedback('يرجى تصحيح الأخطاء قبل الحفظ', 'fix-errors.mp3');
       const firstInvalid = document.querySelector('.is-invalid, .radio-group-error.visible');
       if (firstInvalid) firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
