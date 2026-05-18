@@ -458,6 +458,9 @@
                placeholder="14 رقم"
                maxlength="14" inputmode="numeric" required>
         <div class="invalid-feedback">يجب أن يكون الرقم القومي 14 رقمًا بالضبط</div>
+        <div class="voice-field-feedback error" id="nationalIdDuplicateError" style="display:none;">
+          الرقم القومي مستخدم من قبل
+        </div>
       </div>
 
       <!-- رقم الموبايل -->
@@ -2160,6 +2163,16 @@
     return valid;
   }
 
+  function showNationalIdDuplicateError(show = true) {
+    const el = document.getElementById('nationalId');
+    const msg = document.getElementById('nationalIdDuplicateError');
+    if (el) {
+      el.classList.toggle('is-valid', false);
+      el.classList.toggle('is-invalid', show);
+    }
+    if (msg) msg.style.display = show ? 'block' : 'none';
+  }
+
   function pensionAmountValue() {
     const value = document.getElementById('pensionAmount')?.value?.trim() || '';
     return value === '' ? NaN : parseInt(value, 10);
@@ -2316,6 +2329,7 @@
     const el = document.getElementById(id);
     const handle = () => {
       el.value = el.value.replace(/\D/g, '');
+      if (id === 'nationalId') showNationalIdDuplicateError(false);
       if (el.value.length > 0) markField(id, validator(el.value));
       else {
         el.classList.remove('is-valid', 'is-invalid');
@@ -2505,6 +2519,15 @@
     return null;
   }
 
+  function showFieldDuplicateError(field) {
+    if (field === 'الرقم القومي') {
+      showNationalIdDuplicateError(true);
+      document.getElementById('nationalId')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return true;
+    }
+    return false;
+  }
+
   function showDupModal(docId, field) {
     document.getElementById('dupMsg').textContent =
       `تم العثور على تسجيل سابق بنفس ${field}.\nيمكنك الاطلاع على بياناتك الكاملة من خلال الزر أدناه.`;
@@ -2537,6 +2560,7 @@
     const dup = await findDuplicate(nid, mobile);
     if (dup) {
       setLoading(false);
+      if (showFieldDuplicateError(dup.field)) return;
       showDupModal(dup.doc.id, dup.field);
       return;
     }
