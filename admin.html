@@ -863,6 +863,26 @@
             <span></span>
           </label>
         </div>
+        <div class="settings-row">
+          <div>
+            <h3>الخدمة الصوتية لفحص الحقول</h3>
+            <p>تشغيل أو إيقاف نطق نجاح وأخطاء الحقول أثناء تعبئة النموذج.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setVoiceValidation">
+            <span></span>
+          </label>
+        </div>
+        <div class="settings-row">
+          <div>
+            <h3>الإرشادات الصوتية</h3>
+            <p>تشغيل أو إيقاف الجولة الإرشادية الصوتية عند دخول نموذج المستخدم.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setGuideTour">
+            <span></span>
+          </label>
+        </div>
         <button class="btn-refresh" style="margin-top:18px;" onclick="saveBridgeSettings()">💾 حفظ الإعدادات</button>
         <div class="settings-status" id="settingsStatus"></div>
       </div>
@@ -1293,11 +1313,15 @@
       document.getElementById('setVoiceBridge').checked = settings.voiceBridgeEnabled !== false;
       document.getElementById('setMediaBridge').checked = settings.mediaBridgeEnabled !== false;
       document.getElementById('setGalleryBridge').checked = settings.galleryBridgeEnabled !== false;
+      document.getElementById('setVoiceValidation').checked = settings.voiceValidationEnabled !== false;
+      document.getElementById('setGuideTour').checked = settings.guideTourEnabled !== false;
       if (status) status.textContent = 'تم تحميل الإعدادات.';
     } catch {
       document.getElementById('setVoiceBridge').checked = true;
       document.getElementById('setMediaBridge').checked = true;
       document.getElementById('setGalleryBridge').checked = true;
+      document.getElementById('setVoiceValidation').checked = true;
+      document.getElementById('setGuideTour').checked = true;
       if (status) status.textContent = 'تعذر تحميل الإعدادات، سيتم استخدام الوضع الافتراضي.';
     }
   }
@@ -1307,12 +1331,16 @@
     const voiceBridgeEnabled = document.getElementById('setVoiceBridge').checked;
     const mediaBridgeEnabled = document.getElementById('setMediaBridge').checked;
     const galleryBridgeEnabled = document.getElementById('setGalleryBridge').checked;
+    const voiceValidationEnabled = document.getElementById('setVoiceValidation').checked;
+    const guideTourEnabled = document.getElementById('setGuideTour').checked;
     if (status) status.textContent = 'جارٍ الحفظ...';
     try {
       await setDoc(doc(db, 'settings', SETTINGS_DOC), {
         voiceBridgeEnabled,
         mediaBridgeEnabled,
-        galleryBridgeEnabled
+        galleryBridgeEnabled,
+        voiceValidationEnabled,
+        guideTourEnabled
       }, { merge: true });
       _settingsPromise = null;
       if (status) status.textContent = 'تم حفظ الإعدادات بنجاح.';

@@ -759,17 +759,33 @@
   const app = initializeApp(firebaseConfig);
   const db  = getFirestore(app);
   const SETTINGS_DOC = 'zxzk1tZhE2o2Yf9dCEm8';
+  let featureSettings = {
+    voiceBridgeEnabled: true,
+    mediaBridgeEnabled: true,
+    galleryBridgeEnabled: true,
+    voiceValidationEnabled: true,
+    guideTourEnabled: true
+  };
+  const featureSettingsReady = (async () => {
+    try {
+      const snap = await getDoc(doc(db, 'settings', SETTINGS_DOC));
+      featureSettings = snap.exists() ? { ...featureSettings, ...snap.data() } : featureSettings;
+    } catch (_) {}
+    return featureSettings;
+  })();
 
   async function applyBridgeFeatureSettings() {
     try {
-      const snap = await getDoc(doc(db, 'settings', SETTINGS_DOC));
-      const settings = snap.exists() ? snap.data() : {};
+      const settings = await featureSettingsReady;
       const voiceBtn   = document.getElementById('voiceBridgeBtn');
       const mediaBtn   = document.getElementById('mediaBridgeBtn');
       const galleryBtn = document.getElementById('galleryBridgeBtn');
       if (voiceBtn)   voiceBtn.style.display   = settings.voiceBridgeEnabled   === false ? 'none' : 'flex';
       if (mediaBtn)   mediaBtn.style.display   = settings.mediaBridgeEnabled   === false ? 'none' : 'flex';
       if (galleryBtn) galleryBtn.style.display = settings.galleryBridgeEnabled === false ? 'none' : 'flex';
+      if (settings.guideTourEnabled === false) {
+        document.getElementById('guidePanel')?.classList.remove('visible');
+      }
     } catch (_) {}
   }
 
@@ -1830,6 +1846,10 @@
     warned: false
   };
 
+  featureSettingsReady.then(settings => {
+    VOICE_VALIDATION.enabled = settings.voiceValidationEnabled !== false;
+  }).catch(() => {});
+
   function speakValidationFeedback(message) {
     if (!VOICE_VALIDATION.enabled || !message) return;
 
@@ -1880,6 +1900,7 @@
   }
 
   function announceFieldResult(id, label, valid, errorMessage) {
+    if (!VOICE_VALIDATION.enabled) return;
     const message = valid
       ? `تم إدخال ${label} بنجاح`
       : errorMessage;
@@ -1906,6 +1927,7 @@
   }
 
   function announceRadioResult(groupId, label, value) {
+    if (!VOICE_VALIDATION.enabled) return;
     const message = `تم اختيار ${label}: ${value}`;
     const feedback = voiceFeedbackEl(groupId);
     if (feedback) {
@@ -2741,7 +2763,15 @@
     form?.addEventListener('input', stopForUserWork, true);
     form?.addEventListener('change', stopForUserWork, true);
 
-    const bootGuide = () => setTimeout(() => prepareGuide(false), 900);
+    const bootGuide = () => setTimeout(async () => {
+      const settings = await featureSettingsReady;
+      if (settings.guideTourEnabled === false) {
+        panel.classList.remove('visible');
+        document.body.classList.remove('guide-running');
+        return;
+      }
+      prepareGuide(false);
+    }, 900);
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', bootGuide, { once: true });
     } else {
