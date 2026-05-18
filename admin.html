@@ -853,6 +853,16 @@
             <span></span>
           </label>
         </div>
+        <div class="settings-row">
+          <div>
+            <h3>زر مشاركة الصور والفيديوهات</h3>
+            <p>إظهار أو إخفاء زر مشاركة صور وفيديوهات المستخدم في نموذج المستخدم.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setGalleryBridge">
+            <span></span>
+          </label>
+        </div>
         <button class="btn-refresh" style="margin-top:18px;" onclick="saveBridgeSettings()">💾 حفظ الإعدادات</button>
         <div class="settings-status" id="settingsStatus"></div>
       </div>
@@ -1282,10 +1292,12 @@
       const settings = await getSettingsReady();
       document.getElementById('setVoiceBridge').checked = settings.voiceBridgeEnabled !== false;
       document.getElementById('setMediaBridge').checked = settings.mediaBridgeEnabled !== false;
+      document.getElementById('setGalleryBridge').checked = settings.galleryBridgeEnabled !== false;
       if (status) status.textContent = 'تم تحميل الإعدادات.';
     } catch {
       document.getElementById('setVoiceBridge').checked = true;
       document.getElementById('setMediaBridge').checked = true;
+      document.getElementById('setGalleryBridge').checked = true;
       if (status) status.textContent = 'تعذر تحميل الإعدادات، سيتم استخدام الوضع الافتراضي.';
     }
   }
@@ -1294,11 +1306,13 @@
     const status = document.getElementById('settingsStatus');
     const voiceBridgeEnabled = document.getElementById('setVoiceBridge').checked;
     const mediaBridgeEnabled = document.getElementById('setMediaBridge').checked;
+    const galleryBridgeEnabled = document.getElementById('setGalleryBridge').checked;
     if (status) status.textContent = 'جارٍ الحفظ...';
     try {
       await setDoc(doc(db, 'settings', SETTINGS_DOC), {
         voiceBridgeEnabled,
-        mediaBridgeEnabled
+        mediaBridgeEnabled,
+        galleryBridgeEnabled
       }, { merge: true });
       _settingsPromise = null;
       if (status) status.textContent = 'تم حفظ الإعدادات بنجاح.';
