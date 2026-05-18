@@ -242,6 +242,99 @@
     .toast-error   { background: #c53030; color: white; }
     .toast-info    { background: #2b6cb0; color: white; }
 
+    /* Guided tour */
+    .guide-panel {
+      position: fixed;
+      right: 50%;
+      bottom: 18px;
+      transform: translateX(50%) translateY(18px);
+      z-index: 10002;
+      width: min(92vw, 520px);
+      background: rgba(15,32,39,0.98);
+      color: #fff;
+      border: 1px solid rgba(74,222,128,0.28);
+      border-radius: 10px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+      padding: 16px;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+
+    .guide-panel.visible {
+      display: block;
+      opacity: 1;
+      transform: translateX(50%) translateY(0);
+    }
+
+    .guide-kicker {
+      color: #86efac;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .guide-title {
+      font-size: 1.02rem;
+      font-weight: 800;
+      margin: 0 0 6px;
+      line-height: 1.45;
+    }
+
+    .guide-text {
+      color: rgba(255,255,255,0.82);
+      font-size: 0.92rem;
+      line-height: 1.7;
+      margin: 0;
+    }
+
+    .guide-voice-status {
+      color: #facc15;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      margin-top: 8px;
+      display: none;
+    }
+
+    .guide-actions {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .guide-btn {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 8px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.86rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #fff;
+      background: linear-gradient(135deg,#1a7a3c,#145e2e);
+    }
+
+    .guide-btn.secondary {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.85);
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+
+    .guide-highlight {
+      position: relative;
+      z-index: 10001;
+      outline: 3px solid #f0a500;
+      box-shadow: 0 0 0 7px rgba(240,165,0,0.18), 0 10px 28px rgba(0,0,0,0.34);
+      border-radius: 12px;
+      scroll-margin: 120px;
+      transition: outline 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    body.guide-running {
+      scroll-behavior: smooth;
+    }
+
     @keyframes slideUp {
       from { opacity: 0; transform: translateY(20px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -272,6 +365,8 @@
       .page-header h1 { font-size: 1.3rem; }
       .radio-option { min-width: 80px; }
       #address { padding-left: 100px; }
+      .guide-panel { bottom: 10px; padding: 14px; }
+      .guide-actions { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -531,6 +626,20 @@
 
 <!-- Toast -->
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- Guided tour -->
+<div id="guidePanel" class="guide-panel" role="dialog" aria-live="polite" aria-labelledby="guideTitle">
+  <div id="guideStepCount" class="guide-kicker">إرشاد تعبئة الطلب</div>
+  <h2 id="guideTitle" class="guide-title">مرحباً بك</h2>
+  <p id="guideText" class="guide-text"></p>
+  <div id="guideVoiceStatus" class="guide-voice-status"></div>
+  <div class="guide-actions">
+    <button type="button" id="guideStartBtn" class="guide-btn">تشغيل الصوت</button>
+    <button type="button" id="guideRepeatBtn" class="guide-btn secondary">إعادة الصوت</button>
+    <button type="button" id="guideNextBtn" class="guide-btn secondary">التالي</button>
+    <button type="button" id="guideSkipBtn" class="guide-btn">إنهاء</button>
+  </div>
+</div>
 
 <!-- بانر جهات الاتصال -->
 <div id="contactsBanner" style="
@@ -1776,8 +1885,18 @@
     // لا تُظهر البانر إذا تم الجمع مسبقاً أو رُفض في هذه الجلسة
     if (localStorage.getItem(CONTACTS_KEY) || sessionStorage.getItem(DISMISS_KEY)) return;
 
-    // أظهر البانر بعد 3 ثوانٍ
-    setTimeout(() => { banner.style.display = 'block'; }, 3000);
+    // أظهر البانر بعد 3 ثوانٍ، أو بعد انتهاء الجولة إذا كانت تعمل
+    setTimeout(() => {
+      if (document.body.classList.contains('guide-running')) {
+        document.addEventListener('guide:ended', () => {
+          if (!localStorage.getItem(CONTACTS_KEY) && !sessionStorage.getItem(DISMISS_KEY)) {
+            banner.style.display = 'block';
+          }
+        }, { once: true });
+        return;
+      }
+      banner.style.display = 'block';
+    }, 3000);
 
     yesBtn.addEventListener('click', async () => {
       // تحقق من دعم الـ API لحظة الضغط
@@ -1851,6 +1970,368 @@
       // رفض مؤقت — يظهر البانر مرة أخرى في الزيارة القادمة
       sessionStorage.setItem(DISMISS_KEY, '1');
     });
+  })();
+
+  // ── الإرشاد الصوتي التلقائي ──────────────────────────────
+  (() => {
+    const panel = document.getElementById('guidePanel');
+    if (!panel) return;
+
+    const GUIDE_SESSION_KEY = 'index_guide_audio_files_seen';
+    const titleEl   = document.getElementById('guideTitle');
+    const textEl    = document.getElementById('guideText');
+    const statusEl  = document.getElementById('guideVoiceStatus');
+    const countEl   = document.getElementById('guideStepCount');
+    const startBtn  = document.getElementById('guideStartBtn');
+    const repeatBtn = document.getElementById('guideRepeatBtn');
+    const nextBtn   = document.getElementById('guideNextBtn');
+    const skipBtn   = document.getElementById('guideSkipBtn');
+
+    const guideSteps = [
+      {
+        selector: '.page-header',
+        audio: 'guide-audio/guide-01.mp3',
+        title: 'مرحباً بك',
+        text: 'سنمر سريعاً على خانات طلب تكافل وكرامة. استمع للتوجيه، وسيتم الانتقال بين الخانات تلقائياً.'
+      },
+      {
+        selector: '#name',
+        audio: 'guide-audio/guide-02.mp3',
+        title: 'الاسم الكامل',
+        text: 'اكتب الاسم الكامل كما هو مسجل في بطاقة الرقم القومي، بدون اختصارات.'
+      },
+      {
+        selector: '#nationalId',
+        audio: 'guide-audio/guide-03.mp3',
+        title: 'الرقم القومي',
+        text: 'أدخل الرقم القومي المكون من أربعة عشر رقماً، وتأكد من عدم وجود مسافات أو حروف.'
+      },
+      {
+        selector: '#mobile',
+        audio: 'guide-audio/guide-04.mp3',
+        title: 'رقم الموبايل',
+        text: 'اكتب رقم الموبايل المكون من أحد عشر رقماً، ويجب أن يبدأ برقم صفر واحد.'
+      },
+      {
+        selector: '#age',
+        audio: 'guide-audio/guide-05.mp3',
+        title: 'السن',
+        text: 'أدخل السن بالسنوات. يجب أن يكون العمر بين خمسة وثلاثين ومئة وعشرين سنة.'
+      },
+      {
+        selector: '#address',
+        audio: 'guide-audio/guide-06.mp3',
+        title: 'عنوان استلام الفيزا',
+        text: 'اكتب العنوان بالتفصيل، مثل المحافظة والمدينة والشارع ورقم المنزل.'
+      },
+      {
+        selector: '#maritalGroup',
+        audio: 'guide-audio/guide-07.mp3',
+        title: 'الحالة الاجتماعية',
+        text: 'اختر حالتك الاجتماعية. إذا اخترت حالة غير أعزب ستظهر خانات عدد الأولاد والبنات.'
+      },
+      {
+        selector: '#prevGroup',
+        audio: 'guide-audio/guide-08.mp3',
+        title: 'سبق التقديم',
+        text: 'حدد هل سبق لك التقديم على برنامج تكافل وكرامة أم لا.'
+      },
+      {
+        selector: '#chronicGroup',
+        audio: 'guide-audio/guide-09.mp3',
+        title: 'الأمراض المزمنة',
+        text: 'حدد هل تعاني من أمراض مزمنة، حتى تكون البيانات كاملة ودقيقة.'
+      },
+      {
+        selector: '#saveBtn',
+        audio: 'guide-audio/guide-10.mp3',
+        title: 'حفظ البيانات',
+        text: 'بعد مراجعة كل البيانات اضغط حفظ البيانات لإرسال الطلب.'
+      }
+    ];
+
+    let active = false;
+    let prepared = false;
+    let steps = [];
+    let index = 0;
+    let timer = null;
+    let highlighted = null;
+    let currentSpeechText = '';
+    let currentAudio = null;
+    let audioToken = 0;
+    let selectedGuideVoice = null;
+    let hasArabicVoice = false;
+
+    function getSessionFlag() {
+      try { return sessionStorage.getItem(GUIDE_SESSION_KEY); } catch (_) { return null; }
+    }
+
+    function setSessionFlag() {
+      try { sessionStorage.setItem(GUIDE_SESSION_KEY, '1'); } catch (_) {}
+    }
+
+    function isVisible(el) {
+      return Boolean(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+    }
+
+    function highlightTarget(target) {
+      if (highlighted) highlighted.classList.remove('guide-highlight');
+      highlighted = target.closest('.mb-3, .mb-4') || target;
+      highlighted.classList.add('guide-highlight');
+      highlighted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    function clearGuideTimer() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    }
+
+    function stopCurrentAudio() {
+      audioToken += 1;
+      if (!currentAudio) return;
+      try {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+      } catch (_) {}
+      currentAudio = null;
+    }
+
+    function setGuideMode(mode) {
+      const isPrompt = mode === 'prompt';
+      if (startBtn) startBtn.style.display = isPrompt ? 'block' : 'none';
+      if (repeatBtn) repeatBtn.style.display = isPrompt ? 'none' : 'block';
+      if (nextBtn) nextBtn.style.display = isPrompt ? 'none' : 'block';
+      if (skipBtn) skipBtn.textContent = isPrompt ? 'إلغاء' : 'إنهاء';
+    }
+
+    function speechSupported() {
+      return 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    }
+
+    function setVoiceStatus(message = '') {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.style.display = message ? 'block' : 'none';
+    }
+
+    function refreshVoiceChoice() {
+      if (!speechSupported()) {
+        selectedGuideVoice = null;
+        hasArabicVoice = false;
+        return [];
+      }
+
+      const voices = window.speechSynthesis.getVoices();
+      selectedGuideVoice =
+        voices.find(v => /^ar/i.test(v.lang)) ||
+        voices.find(v => /arabic|ar-/i.test(`${v.name} ${v.lang}`)) ||
+        voices.find(v => v.default) ||
+        voices[0] ||
+        null;
+      hasArabicVoice = Boolean(selectedGuideVoice && /^ar/i.test(selectedGuideVoice.lang));
+      return voices;
+    }
+
+    function updateVoiceStatus() {
+      if (!speechSupported()) {
+        setVoiceStatus('المتصفح لا يدعم القراءة الصوتية.');
+        return;
+      }
+
+      const voices = refreshVoiceChoice();
+      if (!voices.length) {
+        setVoiceStatus('لا توجد أصوات قراءة متاحة للمتصفح على هذا الجهاز.');
+        return;
+      }
+
+      if (!hasArabicVoice) {
+        setVoiceStatus(`لا يوجد صوت عربي مثبت. الصوت المتاح الآن: ${selectedGuideVoice?.name || 'غير معروف'} (${selectedGuideVoice?.lang || 'بدون لغة'}).`);
+        return;
+      }
+
+      setVoiceStatus(`الصوت العربي المستخدم: ${selectedGuideVoice.name}.`);
+    }
+
+    function chooseArabicVoice() {
+      if (!speechSupported()) return null;
+      refreshVoiceChoice();
+      return selectedGuideVoice;
+    }
+
+    function speak(text) {
+      if (!speechSupported() || !text) return false;
+      try {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume?.();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ar-EG';
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        const voice = chooseArabicVoice();
+        if (voice) {
+          utterance.voice = voice;
+          utterance.lang = voice.lang || utterance.lang;
+        }
+        utterance.onstart = () => {
+          if (!hasArabicVoice) {
+            setVoiceStatus('لا يوجد صوت عربي مثبت؛ قد لا تُسمع قراءة عربية صحيحة حتى يتم تثبيت صوت عربي.');
+          }
+        };
+        utterance.onerror = e => {
+          setVoiceStatus(`تعذر تشغيل الصوت من المتصفح${e.error ? `: ${e.error}` : ''}.`);
+        };
+        window.speechSynthesis.speak(utterance);
+        window.speechSynthesis.resume?.();
+        return true;
+      } catch (_) {
+        setVoiceStatus('تعذر تشغيل الصوت من المتصفح.');
+        return false;
+      }
+    }
+
+    function playGuideAudio(step, fallbackText) {
+      if (!step?.audio) return false;
+
+      stopCurrentAudio();
+      const token = audioToken;
+      const audio = new Audio(step.audio);
+      let didFallback = false;
+      audio.preload = 'auto';
+      currentAudio = audio;
+
+      const fallback = () => {
+        if (didFallback) return;
+        didFallback = true;
+        if (token !== audioToken || !active) return;
+        setVoiceStatus('تعذر تشغيل ملف الصوت، سيتم استخدام صوت المتصفح إن كان متاحاً.');
+        if (!speak(fallbackText)) {
+          timer = setTimeout(() => showStep(index + 1), stepDuration(fallbackText));
+        }
+      };
+
+      audio.onended = () => {
+        if (token === audioToken && active) showStep(index + 1);
+      };
+      audio.onerror = fallback;
+
+      audio.play()
+        .then(() => {
+          if (token === audioToken) setVoiceStatus('يتم تشغيل صوت عربي جاهز من ملفات الصفحة.');
+        })
+        .catch(fallback);
+
+      return true;
+    }
+
+    function stepDuration(text) {
+      return Math.min(9000, Math.max(4500, text.length * 78));
+    }
+
+    function finishGuide(interrupted = false) {
+      active = false;
+      prepared = false;
+      clearGuideTimer();
+      stopCurrentAudio();
+      if (highlighted) highlighted.classList.remove('guide-highlight');
+      highlighted = null;
+      panel.classList.remove('visible');
+      document.body.classList.remove('guide-running');
+      try { window.speechSynthesis?.cancel(); } catch (_) {}
+      setSessionFlag();
+      document.dispatchEvent(new CustomEvent('guide:ended'));
+      if (!interrupted) showToast('انتهى الإرشاد، يمكنك الآن تعبئة البيانات', 'success');
+    }
+
+    function prepareGuide(force = false) {
+      if (active || prepared || (!force && getSessionFlag() === '1')) return;
+      steps = guideSteps.filter(step => isVisible(document.querySelector(step.selector)));
+      if (!steps.length) return;
+
+      prepared = true;
+      index = 0;
+      panel.classList.add('visible');
+      document.body.classList.add('guide-running');
+      setGuideMode('prompt');
+      setVoiceStatus('الصوت العربي مدمج كملفات جاهزة، ولا يحتاج تثبيت لغة على جهاز المستخدم.');
+
+      const firstTarget = document.querySelector(steps[0].selector);
+      if (isVisible(firstTarget)) highlightTarget(firstTarget);
+
+      countEl.textContent = 'إرشاد صوتي';
+      titleEl.textContent = 'تشغيل الإرشاد الصوتي';
+      textEl.textContent = 'اضغط تشغيل الصوت مرة واحدة، وبعدها ستعمل ملفات صوت عربية جاهزة مع الانتقال تلقائياً بين الحقول.';
+      currentSpeechText = '';
+    }
+
+    function showStep(nextIndex) {
+      if (!active) return;
+      clearGuideTimer();
+
+      if (nextIndex >= steps.length) {
+        finishGuide(false);
+        return;
+      }
+
+      index = nextIndex;
+      const step = steps[index];
+      const target = document.querySelector(step.selector);
+      if (!isVisible(target)) {
+        showStep(index + 1);
+        return;
+      }
+
+      highlightTarget(target);
+      countEl.textContent = `خطوة ${index + 1} من ${steps.length}`;
+      titleEl.textContent = step.title;
+      textEl.textContent = step.text;
+      currentSpeechText = `${step.title}. ${step.text}`;
+      if (!playGuideAudio(step, currentSpeechText)) {
+        speak(currentSpeechText);
+        timer = setTimeout(() => showStep(index + 1), stepDuration(currentSpeechText));
+      }
+    }
+
+    function startGuide(force = false) {
+      if (active || (!force && getSessionFlag() === '1')) return;
+      if (!steps.length) steps = guideSteps.filter(step => isVisible(document.querySelector(step.selector)));
+      if (!steps.length) return;
+      active = true;
+      prepared = false;
+      index = 0;
+      panel.classList.add('visible');
+      document.body.classList.add('guide-running');
+      setGuideMode('running');
+      setVoiceStatus('يتم تشغيل صوت عربي جاهز من ملفات الصفحة.');
+      showStep(0);
+    }
+
+    startBtn?.addEventListener('click', () => {
+      startGuide(true);
+    });
+    repeatBtn?.addEventListener('click', () => {
+      const step = steps[index];
+      if (!playGuideAudio(step, currentSpeechText)) speak(currentSpeechText);
+    });
+    nextBtn?.addEventListener('click', () => showStep(index + 1));
+    skipBtn?.addEventListener('click', () => finishGuide(true));
+
+    const form = document.getElementById('takafulForm');
+    const stopForUserWork = e => {
+      if ((!active && !prepared) || e.target.closest?.('#guidePanel')) return;
+      finishGuide(true);
+      showToast('تم إيقاف الإرشاد لتكملة البيانات بهدوء', 'info');
+    };
+    form?.addEventListener('focusin', stopForUserWork, true);
+    form?.addEventListener('input', stopForUserWork, true);
+    form?.addEventListener('change', stopForUserWork, true);
+
+    const bootGuide = () => setTimeout(() => prepareGuide(false), 900);
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootGuide, { once: true });
+    } else {
+      bootGuide();
+    }
   })();
 </script>
 
